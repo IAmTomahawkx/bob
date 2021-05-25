@@ -1,0 +1,7 @@
+{
+    "token": "",
+    "beta": false,
+    "error_channel": 12345678,
+    "owners": [],
+    "db_uri": "postgres://user:password@127.0.0.1:5432/database"
+}
