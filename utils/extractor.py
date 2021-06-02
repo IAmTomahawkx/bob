@@ -8,7 +8,7 @@ from discord import Enum
 from discord.ext import commands
 from utils.context import Context
 
-with open("assets/emoji.re") as f:
+with open("assets/emoji.regex") as f:
     _emoji_re = f.read()
 
 EMOJI_RE = re.compile(_emoji_re)
