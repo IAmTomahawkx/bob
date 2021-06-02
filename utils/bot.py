@@ -11,11 +11,8 @@ import parsedatetime
 import datetime
 import discord
 from discord.ext import commands
-from typing import TYPE_CHECKING
 from . import time
-
-if TYPE_CHECKING:
-    from .context import Context
+from .context import Context
 
 class _CaseInsensitiveDict(dict):
     def __contains__(self, k):
@@ -51,7 +48,7 @@ async def get_pre(bot, message):
     try:
         l = [*bot.guild_prefixes[message.guild.id]]
     except:
-        l = []
+        l = ["["]
     if await bot.is_owner(message.author):
         l.append("$")
     return commands.when_mentioned_or(*l)(bot, message)
@@ -108,6 +105,17 @@ class Bot(commands.Bot):
 
     async def on_ready(self):
         print(self.user)
+
+    async def on_message(self, message: discord.Message):
+        if message.author.bot:
+            return
+
+        ctx = await self.get_context(message, cls=Context)
+        if not ctx.valid:
+            cog = self.get_cog("Bull")
+            await cog.run_ping(ctx)
+        else:
+            await self.invoke(ctx)
 
     async def close(self) -> None:
         await self.session.close()

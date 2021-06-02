@@ -1,17 +1,14 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING
 import discord
 from discord.ext import commands
-
-if TYPE_CHECKING:
-    from utils.context import Context
+from utils.context import Context
 
 def setup(bot):
-    bot.add_cog(_reactionroles(bot))
+    bot.add_cog(ReactionRoles(bot))
 
-class _reactionroles(commands.Cog):
+class ReactionRoles(commands.Cog, name="Reaction Roles"):
     def __init__(self, bot):
         self.bot = bot
 
@@ -76,7 +73,7 @@ class _reactionroles(commands.Cog):
     @commands.guild_only()
     @commands.has_permissions(manage_guild=True)
     @commands.bot_has_guild_permissions(manage_roles=True, add_reactions=True)
-    async def reactionrole(self, ctx: "Context"):
+    async def reactionrole(self, ctx: Context):
         """
         allows for the creation of reaction roles! react on a message, get the corresponding role!
         Use `reactionrole add` to add a new reaction role!
@@ -87,7 +84,7 @@ class _reactionroles(commands.Cog):
     @commands.guild_only()
     @commands.has_permissions(manage_guild=True)
     @commands.bot_has_guild_permissions(manage_roles=True, add_reactions=True)
-    async def add(self, ctx):
+    async def add(self, ctx: Context):
         """
         Adds a new reaction role.
         Only works with the manage roles permission and the add reactions permission.
@@ -96,7 +93,6 @@ class _reactionroles(commands.Cog):
         You must have the Manage Server permission to use this command.
         The bot must have the Manage Roles and Add Reactions permission to run this command.
         """
-
 
         mode = None
         while not mode:

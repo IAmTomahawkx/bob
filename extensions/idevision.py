@@ -14,9 +14,7 @@ from discord.ext import commands
 from discord.ext.commands.view import StringView
 
 from utils import paginator
-
-if TYPE_CHECKING:
-    from utils.context import Context
+from utils.context import Context
 
 URL_RE = re.compile(r"http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*(),]|(%[0-9a-fA-F][0-9a-fA-F]))+")
 
@@ -68,8 +66,7 @@ class Idevision(commands.Cog):
         self.usage = {}
         self.session = aiohttp.ClientSession(headers={"Authorization": bot.settings['idevision-token'], "User-Agent": "BOB discord bot"})
         self._hook_session = aiohttp.ClientSession()
-        self.hook = discord.Webhook.from_url(bot.settings['idevision-application-hook'],
-                                             adapter=discord.AsyncWebhookAdapter(self._hook_session))
+        self.hook = discord.Webhook.from_url(bot.settings['idevision-application-hook'], session=self._hook_session)
 
     def cog_unload(self):
         self.bot.loop.create_task(self._unload())
