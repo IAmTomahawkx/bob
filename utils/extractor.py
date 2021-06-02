@@ -1,12 +1,12 @@
 from __future__ import annotations
-from typing import Union, List, Dict, Any, TypedDict, Optional
+from typing import Union, List, Dict, Any
 
 import re
 import toml
 import discord
-from discord import Enum
 from discord.ext import commands
 from utils.context import Context
+from .models import *
 
 with open("assets/emoji.regex") as f:
     _emoji_re = f.read()
@@ -21,105 +21,6 @@ ROLE_PING_RE = re.compile(r"<@&([0-9]+)>")
 DECAY_RE = re.compile(r"(\d+)/(\d+)(m|h|d|w|mo|y)")
 
 DECAY_INTERVAL = {"m": 60, "h": 3600, "d": 86400, "w": 604800, "mo": 2592000, "y": 31536000}
-
-
-class CounterAction(TypedDict):
-    counter: str
-    modify: int
-    condition: str
-    target: Optional[str]
-
-
-class DispatchAction(TypedDict):
-    dispatch: str
-    condition: Optional[str]
-
-
-class LogAction(TypedDict):
-    log: str
-    event: str
-    condition: Optional[str]
-
-
-class DoAction(TypedDict):
-    do: str
-    condition: Optional[str]
-
-
-Actions = Union[CounterAction, DispatchAction, LogAction, DoAction]
-
-
-class SelfRoleMode(Enum):
-    reaction = "reaction"
-    button = "button"
-    command = "command"
-
-    def to_int(self):
-        if self is self.reaction:
-            return 1
-        elif self is self.button:
-            return 2
-        return 3
-
-
-class SelfRole(TypedDict):
-    mode: SelfRoleMode
-    roles: List[int]
-    optin: bool
-    optout: bool
-    channel: Optional[int]
-    emoji: Optional[Union[str, int]]
-    message: Optional[int]
-
-
-class ConfigCounter(TypedDict):
-    name: str
-    per_user: bool
-    initial_count: int
-    decay_rate: Optional[int]
-    decay_per: Optional[int]
-
-
-class ConfigEvent(TypedDict):
-    name: str
-    actions: List[Actions]
-
-
-class Logger(TypedDict):
-    name: str
-    channel: int
-    format: Union[Dict[str, str], str]
-
-
-class CommandArgumentType(Enum):
-    user = "user"
-    chan = "channel"
-    role = "role"
-    num = "number"
-    text = "text"
-
-
-class CommandArgument(TypedDict):
-    name: str
-    type: CommandArgumentType
-    consume: int
-
-
-class Command(TypedDict):
-    name: str
-    arguments: List[CommandArgument]
-    actions: List[Union[Actions, str]]
-
-
-class AutomodIgnore(TypedDict):
-    roles: Optional[List[int]]
-    channels: Optional[List[int]]
-
-
-class Automod(TypedDict):
-    event: str
-    ignore: Optional[AutomodIgnore]
-    actions: List[Actions]
 
 
 class ConfigLoadError(Exception):
@@ -593,13 +494,3 @@ async def resolve_emoji(ctx: Context, arg: Union[str, int], parse_context: str) 
 async def resolve_user(ctx: Context, arg: Union[str, int], parse_context: str) -> int:
     pass  # TODO
 
-
-class GuildConfig:
-    def __init__(self, guild_id: int):
-        self.guild_id = guild_id
-        self.selfroles: List[SelfRole] = []
-        self.counters: List[ConfigCounter] = []
-        self.events = []
-        self.automod_events = []
-        self.loggers = {}
-        self.commands = {}
