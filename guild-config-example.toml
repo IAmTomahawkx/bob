@@ -1,0 +1,84 @@
+
+[[selfrole]]
+mode = "command"
+channel = "bot-spam" # or channel id
+emoji = ":angy:" # or emoji id
+roles = [ 604116331356487680 ]
+opt-in = true
+opt-out = true
+
+[[selfrole]]
+mode = "button"
+channel = 604116058407829506 # or channel name
+emoji = 828434317461815327 # or emoji name
+role = "Early Supporter"
+opt-in = true
+opt-out = false
+
+[[selfrole]]
+mode = "reaction"
+message = "https://canary.discord.com/channels/604085864514977813/604116058407829506/849413621485404190"
+
+[[counter]]
+name = "warnings"
+per-user = true
+initial-count = 0
+decay = "1/30d"
+
+[[counter]]
+name = "next-case-number"
+
+[[event]]
+name = "warn"
+actions = [
+    { counter = "next-case-number", modify = 1 },
+    { counter = "warnings", modify = 1, target = "$userid" },
+    { dispatch = "kick", if = "%warnings >= 5"},
+    { dispatch = "ban", if = "%warnings >= 10"}
+]
+
+[[event]]
+name = "pardon"
+actions = [
+    { counter = "case-number", modify = 1, target = "$userid" },
+    { counter = "warnings", modify = -1, target = "$userid" }
+]
+
+[[event]]
+name = "kick"
+actions = [
+    { do = "$kick($userid)" }
+]
+
+[[logging]]
+name = "public-log"
+channel = "#logs" # or channel id
+format = "$target ($target) was $action ed by $user ($userid) in $channel ($channelid) for reason: $reason"
+
+[[logging]]
+name = "mod-log"
+channel = 843731946017783849
+format.kick = "$user was kicked by $mod for reason: `$reason`"
+format.ban = "$user was banned by $mod for reason: `$reason`"
+format.warn = "$user was warned by $mod for reason: `$reason`"
+format.history-join = "$target has joined. They have more than 5 previous cases"
+
+# Built in impl, but show it anyways
+[[command]]
+name = "warn"
+arguments = [
+    { name = "target", type = "user", consume = 1},
+    { name = "reason", type = "text", consume = "all"}
+]
+actions = [
+    { do = "$savecase($target, $user, %next-case-number, $reason)" },
+    { dispatch = "warn", args = { reason = "$reason", target = "$target", targetid = "$targetid" } },
+    "Warned $target"
+]
+
+[[automod]]
+event = "member_join"
+ignore = { roles = ["special-people", 172018645948563456], channels = [765973986520727582, "special-channel", "#other-special-channel"] }
+actions = [
+    { log = "mod-log", event = "history-join", if = "$casecount($userid) >= 5" }
+]
