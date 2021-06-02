@@ -45,18 +45,28 @@ class DoAction(TypedDict):
 
 Actions = Union[CounterAction, DispatchAction, LogAction, DoAction]
 
-
 class SelfRoleMode(Enum):
     reaction = "reaction"
     button = "button"
     command = "command"
 
     def to_int(self):
-        if self is self.reaction:
+        if self is SelfRoleMode.reaction:
             return 1
-        elif self is self.button:
+        elif self is SelfRoleMode.button:
             return 2
         return 3
+
+    @staticmethod
+    def from_int(n: int) -> "SelfRoleMode":
+        if n == 1:
+            return SelfRoleMode.reaction # noqa
+        elif n == 2:
+            return SelfRoleMode.button # noqa
+        elif n == 3:
+            return SelfRoleMode.command # noqa
+        else:
+            raise ValueError("Number was not a valid mode")
 
 
 class SelfRole(TypedDict):

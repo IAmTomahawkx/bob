@@ -1,22 +1,36 @@
 from __future__ import annotations
 
 import asyncio
+import itertools
+
+import asyncpg
 import discord
 from discord.ext import commands
 from utils.context import Context
+from utils.bot import Bot
+from utils.extractor import ConfigLoadError
+from utils import views, models
 
 
 def setup(bot):
-    bot.add_cog(ReactionRoles(bot))
+    bot.add_cog(SelfRoles(bot))
 
 
-class ReactionRoles(commands.Cog, name="Reaction Roles"):
-    def __init__(self, bot):
+class SelfRoles(commands.Cog, name="Self Roles"):
+    def __init__(self, bot: Bot):
         self.bot = bot
 
     @commands.Cog.listener()
+    async def on_interaction(self, interation: discord.Interaction):
+        if interation.type is not discord.InteractionType.component:
+            return
+
+        query = "SELECT role_id, interaction_cid FROM selfroles_roles WHERE interaction_id = $1"
+        data = await self.bot.db.fetchrow(query)
+
+    @commands.Cog.listener()
     async def on_raw_reaction_add(self, payload):
-        if self.bot.get_user(payload.user_id).bot:
+        if self.bot.get_user(payload.user_id).bot: # noqa
             return
 
         if not payload.guild_id:
@@ -80,6 +94,83 @@ class ReactionRoles(commands.Cog, name="Reaction Roles"):
                     f"I do not have permission to remove {guild.get_role(match).mention} role from {member.mention}",
                     delete_after=5,
                 )
+
+    async def config_hook(self, cfg: models.GuildConfig, conn: asyncpg.Connection):
+        guild: discord.Guild = self.bot.get_guild(cfg.guild_id)
+        previous = await conn.fetch("SELECT id FROM selfroles WHERE guild_id = $1", cfg.guild_id)
+        if previous:
+            query = "SELECT channel_id, msg_id FROM selfroles_roles WHERE msg_id IS NOT NULL AND cfg_id = ANY($1)"
+            data = await conn.fetch(query, [x['id'] for x in previous])
+            for d in data:
+                channel: discord.TextChannel = guild.get_channel(d['channel_id'])
+                msg: discord.Message = await channel.fetch_message(d['msg_id'])
+                if msg.author == self.bot.user: # these will be recreated
+                    try:
+                        await msg.delete()
+                    except: # noqa
+                        pass
+
+        await conn.execute("DELETE FROM selfroles CASCADE WHERE guild_id = $1", cfg.guild_id)
+
+        comms = list(filter(lambda x: x['mode'] is models.SelfRoleMode.command, cfg.selfroles)) # these can be inserted directly into the db
+        for x in comms:
+            query = "INSERT INTO selfroles (mode, guild_id, optin, optout) VALUES ($1, $2, $3, $4) RETURNING id"
+            sid = await conn.fetchval(query, x['mode'].to_int(), cfg.guild_id, x['optin'], x['optout'])
+            await conn.executemany("INSERT INTO selfroles_roles VALUES ($1, $2)", [(sid, r) for r in x['roles']])
+
+        reactions = list(filter(lambda x: x['mode'] is models.SelfRoleMode.reaction, cfg.selfroles))
+        for x in reactions:
+            chnl: discord.TextChannel = guild.get_channel(x['channel'])
+            if not x['message']:
+                msg: discord.PartialMessage = chnl.get_partial_message(chnl.last_message_id)
+            else:
+                msg: discord.PartialMessage = chnl.get_partial_message(x['message'])
+
+            if isinstance(x['emoji'], int):
+                emoji = discord.utils.get(guild.emojis, id=x['emoji'])
+            else:
+                emoji = x['emoji']
+
+            try:
+                await msg.add_reaction(emoji)
+            except discord.Forbidden:
+                raise ConfigLoadError(f"Could not add the reaction {emoji} to selfrole. Message id: {msg.id}. Channel: {chnl.mention}")
+            except discord.HTTPException:
+                pass
+
+            query = "INSERT INTO selfroles (mode, guild_id, optin, optout) VALUES ($1, $2, $3, $4) RETURNING id"
+            sid = await conn.fetchval(query, x['mode'].to_int(), cfg.guild_id, x['optin'], x['optout'])
+            await conn.executemany("INSERT INTO selfroles_roles VALUES ($1, $2, $3, $4)", [(sid, r, msg.id, chnl.id) for r in x['roles']])
+
+        buttons = itertools.groupby(list(filter(lambda x: x['mode'] is models.SelfRoleMode.button, cfg.selfroles)), lambda x: x['channel'])
+        for ch, x in buttons:
+            chnl: discord.TextChannel = guild.get_channel(ch)
+            roles = list(x)
+            view, cids = views.create_selfrole_view(guild, roles)
+            content = "Press the button for the corresponding role:\n"
+            content += "\n".join(f"{discord.utils.get(guild.emojis, id=r['emoji'])} - <@&{r['roles'][0]}>" for r in roles)
+
+            msg = await chnl.send(content, view=view, allowed_mentions=discord.AllowedMentions.none())
+            query = """
+            WITH ins AS (
+                INSERT INTO
+                    selfroles
+                    (mode, guild_id, optin, optout)
+                VALUES
+                    ($1, $2, $3, $4)
+                RETURNING
+                    id
+            )
+            INSERT INTO
+                selfroles_roles
+            VALUES
+            ((SELECT id FROM ins), $5, $6, $7, $8)
+            """
+            await conn.executemany(query, [
+                (models.SelfRoleMode.button.to_int(), guild.id, t['optin'], t['optout'], t['roles'][0], msg.id, chnl.id, cids[t['roles'][0]])
+                for t in x
+                ]
+            )
 
     @commands.group(aliases=["rr"])
     @commands.guild_only()
