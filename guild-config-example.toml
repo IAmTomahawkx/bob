@@ -57,7 +57,7 @@ format = "$target ($target) was $action ed by $user ($userid) in $channel ($chan
 
 [[logging]]
 name = "mod-log"
-channel = 843731946017783849
+channel = 604436920843501568
 format.kick = "$user was kicked by $mod for reason: `$reason`"
 format.ban = "$user was banned by $mod for reason: `$reason`"
 format.warn = "$user was warned by $mod for reason: `$reason`"
@@ -78,7 +78,7 @@ actions = [
 
 [[automod]]
 event = "member_join"
-ignore = { roles = ["special-people", 172018645948563456], channels = [765973986520727582, "special-channel", "#other-special-channel"] }
+ignore = { roles = ["developer", 604125833405136897], channels = [604436940581896241, "logs", "#join-and-leave"] }
 actions = [
     { log = "mod-log", event = "history-join", if = "$casecount($userid) >= 5" }
 ]
