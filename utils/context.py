@@ -5,6 +5,7 @@ import discord
 from discord.ext import commands
 from . import paginator, players
 
+
 def boolize(string: str) -> bool:
     string = string.lower()
     if string in ["true", "yes", "on", "enabled", "y", "t", "1"]:
@@ -13,6 +14,7 @@ def boolize(string: str) -> bool:
         return False
     else:
         raise commands.UserInputError(f"{string} is not a recognized boolean option")
+
 
 class Context(commands.Context):
     async def paginate_fields(self, fields, **kwargs):
@@ -31,13 +33,13 @@ class Context(commands.Context):
         await pages.paginate()
 
     async def ask(
-            self,
-            question: Optional[str],
-            return_bool=True,
-            timeout=60,
-            predicate: Optional[Callable[[discord.Message], bool]]=None,
-            reply=False,
-            reply_mention=False
+        self,
+        question: Optional[str],
+        return_bool=True,
+        timeout=60,
+        predicate: Optional[Callable[[discord.Message], bool]] = None,
+        reply=False,
+        reply_mention=False,
     ) -> Union[discord.Message, bool]:
         if question:
             if reply:
@@ -58,7 +60,7 @@ class Context(commands.Context):
         return boolize(m.content)
 
     @staticmethod
-    def embed(**kwargs)->discord.Embed:
+    def embed(**kwargs) -> discord.Embed:
         return discord.Embed(color=discord.Color.teal(), **kwargs)
 
     @staticmethod

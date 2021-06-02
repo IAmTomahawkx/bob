@@ -5,8 +5,10 @@ import discord
 from discord.ext import commands
 from utils.context import Context
 
+
 def setup(bot):
     bot.add_cog(ReactionRoles(bot))
+
 
 class ReactionRoles(commands.Cog, name="Reaction Roles"):
     def __init__(self, bot):
@@ -21,7 +23,12 @@ class ReactionRoles(commands.Cog, name="Reaction Roles"):
             return
 
         query = "SELECT role_id, mode FROM reaction_roles WHERE guild_id = $1 AND message_id = $2 AND emoji_id = $3"
-        s = await self.bot.db.fetchrow(query, payload.guild_id, payload.message_id, payload.emoji.name if payload.emoji.is_unicode_emoji() else str(payload.emoji.id))
+        s = await self.bot.db.fetchrow(
+            query,
+            payload.guild_id,
+            payload.message_id,
+            payload.emoji.name if payload.emoji.is_unicode_emoji() else str(payload.emoji.id),
+        )
         if s is None:
             return
 
@@ -33,12 +40,14 @@ class ReactionRoles(commands.Cog, name="Reaction Roles"):
                 await member.add_roles(discord.Object(id=match))
             except discord.HTTPException:
                 if not guild.get_role(match):
-                    await self.bot.db.execute("DELETE FROM reaction_roles WHERE role_id = $1", match) # the role has been deleted
+                    await self.bot.db.execute(
+                        "DELETE FROM reaction_roles WHERE role_id = $1", match
+                    )  # the role has been deleted
                     return
 
                 await guild.get_channel(payload.channel_id).send(
                     f"I do not have permission to add {guild.get_role(match).mention} role to {member.mention}",
-                    delete_after=5
+                    delete_after=5,
                 )
 
     @commands.Cog.listener()
@@ -47,9 +56,12 @@ class ReactionRoles(commands.Cog, name="Reaction Roles"):
             return
 
         query = "SELECT role_id, mode FROM reaction_roles WHERE guild_id = $1 AND message_id = $2 AND emoji_id = $3"
-        s = await self.bot.db.fetchrow(query, payload.guild_id, payload.message_id,
-                                   payload.emoji.name if payload.emoji.is_unicode_emoji() else str(payload.emoji.id)
-                                   )
+        s = await self.bot.db.fetchrow(
+            query,
+            payload.guild_id,
+            payload.message_id,
+            payload.emoji.name if payload.emoji.is_unicode_emoji() else str(payload.emoji.id),
+        )
         if s is None:
             return
 
@@ -66,10 +78,10 @@ class ReactionRoles(commands.Cog, name="Reaction Roles"):
 
                 await guild.get_channel(payload.channel_id).send(
                     f"I do not have permission to remove {guild.get_role(match).mention} role from {member.mention}",
-                    delete_after=5
+                    delete_after=5,
                 )
 
-    @commands.group(aliases=['rr'])
+    @commands.group(aliases=["rr"])
     @commands.guild_only()
     @commands.has_permissions(manage_guild=True)
     @commands.bot_has_guild_permissions(manage_roles=True, add_reactions=True)
@@ -96,8 +108,12 @@ class ReactionRoles(commands.Cog, name="Reaction Roles"):
 
         mode = None
         while not mode:
-            _mode = await ctx.ask("please respond with the mode you wish to set this reaction role to.\n```\n1: add on reaction\n2: remove "
-              "on reaction\n3:add on reaction add, remove on reaction removal\n```", return_bool=False, reply=True)
+            _mode = await ctx.ask(
+                "please respond with the mode you wish to set this reaction role to.\n```\n1: add on reaction\n2: remove "
+                "on reaction\n3:add on reaction add, remove on reaction removal\n```",
+                return_bool=False,
+                reply=True,
+            )
             if ctx.prefix + "cancel" in _mode.content:
                 return await _mode.reply("Aborting")
 
@@ -123,7 +139,11 @@ class ReactionRoles(commands.Cog, name="Reaction Roles"):
 
         link = None
         while not link:
-            _lnk = await ctx.ask("Please provide a link to the message that should have the reaction role attached to it", return_bool=False, reply=True)
+            _lnk = await ctx.ask(
+                "Please provide a link to the message that should have the reaction role attached to it",
+                return_bool=False,
+                reply=True,
+            )
             if ctx.prefix + "cancel" in _lnk.content:
                 return await _lnk.reply("Aborting")
 
@@ -133,15 +153,22 @@ class ReactionRoles(commands.Cog, name="Reaction Roles"):
                 await _lnk.reply("Couldn't find a message there. Please try again")
 
             except commands.ChannelNotReadable:
-                await _lnk.reply("This message links to a channel I can't read. Please either give me permission to that channel, or use a different message")
+                await _lnk.reply(
+                    "This message links to a channel I can't read. Please either give me permission to that channel, or use a different message"
+                )
 
-        v = await ctx.reply("please add a reaction to **this** message. it will be used as the reaction role emote.\n Please note that I must be able to use that emote (it should either be from this server, or a built in emote)", mention_author=False)
+        v = await ctx.reply(
+            "please add a reaction to **this** message. it will be used as the reaction role emote.\n Please note that I must be able to use that emote (it should either be from this server, or a built in emote)",
+            mention_author=False,
+        )
 
         emote = is_custom = None
 
         while not emote:
             try:
-                reaction, user = await self.bot.wait_for("reaction_add", check=lambda r, u: u==ctx.author and r.message.id == v.id, timeout=60)
+                reaction, user = await self.bot.wait_for(
+                    "reaction_add", check=lambda r, u: u == ctx.author and r.message.id == v.id, timeout=60
+                )
                 if isinstance(reaction.emoji, (discord.PartialEmoji, discord.Emoji)):
                     if reaction.emoji not in ctx.guild.emojis:
                         raise ValueError
@@ -159,7 +186,15 @@ class ReactionRoles(commands.Cog, name="Reaction Roles"):
         except discord.HTTPException:
             return await ctx.send("Sorry, I can't add reactions to the given message. Aborting")
 
-        await self.bot.db.execute("INSERT INTO reaction_roles VALUES ($1,$2,$3,$4,$5,$6);", ctx.guild.id, role.id, str(emote.id) if is_custom else emote, link.id, link.channel.id, mode)
+        await self.bot.db.execute(
+            "INSERT INTO reaction_roles VALUES ($1,$2,$3,$4,$5,$6);",
+            ctx.guild.id,
+            role.id,
+            str(emote.id) if is_custom else emote,
+            link.id,
+            link.channel.id,
+            mode,
+        )
         await ctx.send("Complete!")
 
     @reactionrole.command()
@@ -178,7 +213,9 @@ class ReactionRoles(commands.Cog, name="Reaction Roles"):
         while not link:
             _lnk = await ctx.ask(
                 f"Please provide a link to the message that should have the reaction role attached to it (type '{ctx.prefix}cancel' at any time to abort this process)",
-                return_bool=False, reply=True)
+                return_bool=False,
+                reply=True,
+            )
             if ctx.prefix + "cancel" in _lnk.content:
                 return await _lnk.reply("Aborting", mention_author=False)
 
@@ -189,7 +226,8 @@ class ReactionRoles(commands.Cog, name="Reaction Roles"):
 
             except commands.ChannelNotReadable:
                 await _lnk.reply(
-                    "This message links to a channel I can't read. Please either give me permission to that channel, or use a different message")
+                    "This message links to a channel I can't read. Please either give me permission to that channel, or use a different message"
+                )
 
         _msg = await ctx.send("please reply with the emoji you wish to remove")
         if ctx.prefix + "cancel" in _msg.content:
@@ -197,9 +235,9 @@ class ReactionRoles(commands.Cog, name="Reaction Roles"):
 
         while True:
             try:
-                _msg = await self.bot.wait_for("message",
-                                             check=lambda msg: msg.author == ctx.author and msg.channel == ctx.channel,
-                                             timeout=60)
+                _msg = await self.bot.wait_for(
+                    "message", check=lambda msg: msg.author == ctx.author and msg.channel == ctx.channel, timeout=60
+                )
                 if ctx.prefix + "cancel" in _msg.content:
                     return await _msg.reply("Aborting", mention_author=False)
 
@@ -209,10 +247,16 @@ class ReactionRoles(commands.Cog, name="Reaction Roles"):
             except asyncio.TimeoutError:
                 return await ctx.send("Timed out. Please respond faster")
 
-            if await self.bot.db.fetchrow("DELETE FROM reaction_roles WHERE guild_id = $1 AND message_id = $3 AND emoji_id = $4 RETURNING *",
-                                  ctx.guild.id, link.id, reaction):
+            if await self.bot.db.fetchrow(
+                "DELETE FROM reaction_roles WHERE guild_id = $1 AND message_id = $3 AND emoji_id = $4 RETURNING *",
+                ctx.guild.id,
+                link.id,
+                reaction,
+            ):
                 return await ctx.send("Reaction role successfully removed")
             else:
-                _msg = await _msg.reply("The reaction role was not found. Please reply with the emoji you wish to remove")
+                _msg = await _msg.reply(
+                    "The reaction role was not found. Please reply with the emoji you wish to remove"
+                )
                 if ctx.prefix + "cancel" in _msg.content:
                     return await _msg.reply("Aborting")

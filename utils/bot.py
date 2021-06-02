@@ -14,6 +14,7 @@ from discord.ext import commands
 from . import time
 from .context import Context
 
+
 class _CaseInsensitiveDict(dict):
     def __contains__(self, k):
         return super().__contains__(k.lower())
@@ -36,7 +37,7 @@ class _CaseInsensitiveDict(dict):
 
 def parse_time(ps, return_times_instead=False):
     cal = parsedatetime.Calendar()
-    v = cal.nlp(ps)[0] # type: datetime.datetime
+    v = cal.nlp(ps)[0]  # type: datetime.datetime
     if not return_times_instead:
         return calendar.timegm(v.replace(tzinfo=datetime.timezone.utc).timetuple())
     return time.human_timedelta(v)
@@ -58,20 +59,20 @@ class Bot(commands.Bot):
     def __init__(self, **settings):
         self.settings = {}
         self.reload_settings()
-        self.beta = self.settings['beta']
-        self._token = self.settings['token']
-        self.error_channel = self.settings['error_channel']
-        self.db: asyncpg.pool.Pool = None # noqa
+        self.beta = self.settings["beta"]
+        self._token = self.settings["token"]
+        self.error_channel = self.settings["error_channel"]
+        self.db: asyncpg.pool.Pool = None  # noqa
 
         intents = discord.Intents.default()
         intents.members = True
         allowed_mentions = discord.AllowedMentions.none()
         super().__init__(get_pre, intents=intents, allowed_mentions=allowed_mentions, **settings)
 
-        if 'owners' in self.settings and self.settings['owners']:
-            self.owner_ids = self.settings['owners']
+        if "owners" in self.settings and self.settings["owners"]:
+            self.owner_ids = self.settings["owners"]
 
-        self.session: aiohttp.ClientSession = None # noqa
+        self.session: aiohttp.ClientSession = None  # noqa
         self.uptime = datetime.datetime.utcnow()
         self.version = None
 
@@ -85,9 +86,9 @@ class Bot(commands.Bot):
         with open("settings.json") as f:
             self.settings = json.load(f)
 
-    async def start(self) -> None: # noqa
+    async def start(self) -> None:  # noqa
         self.session = aiohttp.ClientSession()
-        self.db: asyncpg.pool.Pool = await asyncpg.create_pool(self.settings['db_uri'], min_size=1)
+        self.db: asyncpg.pool.Pool = await asyncpg.create_pool(self.settings["db_uri"], min_size=1)
         with open("schema.sql") as f:
             schema = f.read()
 

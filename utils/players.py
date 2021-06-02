@@ -6,8 +6,9 @@ import random
 import discord
 import wavelink
 
+
 class Track(wavelink.Track):
-    __slots__ = ('requester', 'channel', 'message')
+    __slots__ = ("requester", "channel", "message")
 
     def __init__(self, id_, info, *, ctx=None, requester=None):
         super(Track, self).__init__(id_, info)
@@ -18,6 +19,7 @@ class Track(wavelink.Track):
     def is_dead(self):
         return self.dead
 
+
 class MusicQueue(asyncio.Queue):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -26,10 +28,10 @@ class MusicQueue(asyncio.Queue):
         self.repeat_start = None
 
     def reset(self):
-        while len(self._queue)-1 > self.index:
+        while len(self._queue) - 1 > self.index:
             self._queue.pop()
         self.repeat_start = None
-        #dont reset the index, keep the history
+        # dont reset the index, keep the history
 
     def hard_reset(self):
         self._queue.clear()
@@ -80,11 +82,12 @@ class MusicQueue(asyncio.Queue):
 
     @property
     def q(self):
-        return self._queue[self.index:]
+        return self._queue[self.index :]
 
     @property
     def history(self):
-        return self._queue[:self.index]
+        return self._queue[: self.index]
+
 
 class AutoQueue(asyncio.Queue):
     def __init__(self, **kwargs):
@@ -102,9 +105,10 @@ class AutoQueue(asyncio.Queue):
         self._queue.extend(tracks)
 
     def entries(self):
-        upnext = self._queue[self.index+1:]
-        later = self._queue[:self.index]
+        upnext = self._queue[self.index + 1 :]
+        later = self._queue[: self.index]
         return upnext + later
+
 
 class Player(wavelink.Player):
     def __init__(self, bot, guild_id: int, node: wavelink.Node):
@@ -124,11 +128,7 @@ class Player(wavelink.Player):
         self.inactive = False
         self.repeating = False
 
-        self.controls = {'⏯': 'rp',
-                         '⏹': 'stop',
-                         '⏭': 'skip',
-                         '🔀': 'shuffle',
-                         '🔂': 'repeat'}
+        self.controls = {"⏯": "rp", "⏹": "stop", "⏭": "skip", "🔀": "shuffle", "🔂": "repeat"}
 
         self.pauses = set()
         self.resumes = set()
@@ -168,7 +168,9 @@ class Player(wavelink.Player):
                 song = await asyncio.wait_for(self.queue.get(), timeout=180)
             except asyncio.TimeoutError:
                 if self.controller_channel_id is not None:
-                    await self.bot.get_channel(self.controller_channel_id).send(embed=discord.Embed(description="Leaving due to inactivity!", color=0x36393E), delete_after=7)
+                    await self.bot.get_channel(self.controller_channel_id).send(
+                        embed=discord.Embed(description="Leaving due to inactivity!", color=0x36393E), delete_after=7
+                    )
                 return await self.destroy()
             if not song:
                 continue
@@ -198,7 +200,7 @@ class Player(wavelink.Player):
             except:
                 pass
 
-    async def now_playing(self, channel: discord.TextChannel=None):
+    async def now_playing(self, channel: discord.TextChannel = None):
         if self.last_np is not None:
             try:
                 await self.last_np.delete()
@@ -207,14 +209,14 @@ class Player(wavelink.Player):
         channel = channel or self.bot.get_channel(self.controller_channel_id)
         if channel is None:
             return
-        track = self.current #type: Track
+        track = self.current  # type: Track
         embed = discord.Embed(color=3553598, title="Now Playing")
-        embed.description = f"[{track.title}]({track.uri} \"{track.title}\")\nby {track.author}"
+        embed.description = f'[{track.title}]({track.uri} "{track.title}")\nby {track.author}'
         embed.set_author(name=f"Requested by {track.requester}", icon_url=track.requester.avatar_url)
         embed.timestamp = datetime.datetime.utcnow()
         self.last_np = await channel.send(embed=embed)
 
-    async def invoke_controller(self, track: wavelink.Track = None, channel: discord.TextChannel=None):
+    async def invoke_controller(self, track: wavelink.Track = None, channel: discord.TextChannel = None):
         """Invoke our controller message, and spawn a reaction controller if one isn't alive."""
         streaming = "\U0001f534 streaming"
         if not track:
@@ -228,21 +230,24 @@ class Player(wavelink.Player):
             return
 
         self.updating = True
-        stuff = f'Now Playing:```ini\n{track.title}\n\n' \
-                f'[EQ]: {self.eq}\n' \
-                f'[Presets]: Flat/Boost/Piano/Metal\n' \
-                f'[Duration]: {datetime.timedelta(milliseconds=int(track.length)) if not track.is_stream else streaming}\n' \
-                f'[Volume]: {self.volume}\n'
-        embed = discord.Embed(title='Music Controller',
-                              colour=0xffb347)
+        stuff = (
+            f"Now Playing:```ini\n{track.title}\n\n"
+            f"[EQ]: {self.eq}\n"
+            f"[Presets]: Flat/Boost/Piano/Metal\n"
+            f"[Duration]: {datetime.timedelta(milliseconds=int(track.length)) if not track.is_stream else streaming}\n"
+            f"[Volume]: {self.volume}\n"
+        )
+        embed = discord.Embed(title="Music Controller", colour=0xFFB347)
         embed.set_thumbnail(url=track.thumb)
-        embed.add_field(name='Video URL', value=f'[Click Here!]({track.uri})')
-        embed.add_field(name='Requested By', value=track.requester.mention)
-        embed.add_field(name='Current DJ', value=self.dj.mention)
+        embed.add_field(name="Video URL", value=f"[Click Here!]({track.uri})")
+        embed.add_field(name="Requested By", value=track.requester.mention)
+        embed.add_field(name="Current DJ", value=self.dj.mention)
 
         if len(self.entries) > 0:
-            data = '\n'.join(f'- {t.title[0:45]}{"..." if len(t.title) > 45 else ""}\n{"-"*10}'
-                             for t in itertools.islice([e for e in self.entries if not e.is_dead], 0, 3, None))
+            data = "\n".join(
+                f'- {t.title[0:45]}{"..." if len(t.title) > 45 else ""}\n{"-"*10}'
+                for t in itertools.islice([e for e in self.entries if not e.is_dead], 0, 3, None)
+            )
             stuff += data
         embed.description = stuff + "```"
         if self.controller_channel_id is None:
@@ -304,14 +309,14 @@ class Player(wavelink.Player):
             if self.channel_id is None:
                 return self.reaction_task.cancel()
 
-            react, user = await self.bot.wait_for('reaction_add', check=check)
+            react, user = await self.bot.wait_for("reaction_add", check=check)
             control = self.controls.get(str(react))
 
-            if control == 'rp':
+            if control == "rp":
                 if self.paused:
-                    control = 'resume'
+                    control = "resume"
                 else:
-                    control = 'pause'
+                    control = "pause"
 
             try:
                 await self.controller_message.remove_reaction(react, user)
@@ -330,7 +335,7 @@ class Player(wavelink.Player):
                 else:
                     self.bot.loop.create_task(ctx.invoke(cmd))
             except Exception as e:
-                ctx.command = self.bot.get_command('reactcontrol')
+                ctx.command = self.bot.get_command("reactcontrol")
                 await cmd.dispatch_error(ctx=ctx, error=e)
 
         await self.destroy_controller()
@@ -377,6 +382,7 @@ class Player(wavelink.Player):
             return False
         return False
 
+
 class AutoPlayer(wavelink.Player):
     def __init__(self, bot, guild_id, node, tc_id=None):
         super().__init__(bot, guild_id, node)
@@ -390,13 +396,13 @@ class AutoPlayer(wavelink.Player):
         self._task = self.bot.loop.create_task(self.player_loop())
 
     async def player_loop(self):
-        await Player.player_loop(self) # noqa
+        await Player.player_loop(self)  # noqa
 
     def assign_playlist(self, tracks: list, info: wavelink.TrackPlaylist):
         self.queue.put_nowait(tracks)
         self.trackinfo = info.data
 
-    async def now_playing(self, channel: discord.TextChannel=None):
+    async def now_playing(self, channel: discord.TextChannel = None):
         if self.last_np is not None:
             try:
                 await self.last_np.delete()
@@ -405,9 +411,9 @@ class AutoPlayer(wavelink.Player):
         channel = channel or self.bot.get_channel(self.controller_channel_id)
         if channel is None:
             return
-        track = self.current #type: Track
+        track = self.current  # type: Track
         embed = discord.Embed(color=3553598, title="Now Playing")
-        embed.description = f"[{track.title}]({track.uri} \"{track.title}\")\nby {track.author}"
+        embed.description = f'[{track.title}]({track.uri} "{track.title}")\nby {track.author}'
         embed.timestamp = datetime.datetime.utcnow()
         self.last_np = await channel.send(embed=embed)
 

@@ -32,26 +32,29 @@ from discord.ext import commands
 class plural:
     def __init__(self, value):
         self.value = value
+
     def __format__(self, format_spec):
         v = self.value
-        singular, sep, plural = format_spec.partition('|')
-        plural = plural or f'{singular}s'
+        singular, sep, plural = format_spec.partition("|")
+        plural = plural or f"{singular}s"
         if abs(v) != 1:
-            return f'{v} {plural}'
-        return f'{v} {singular}'
+            return f"{v} {plural}"
+        return f"{v} {singular}"
 
-def human_join(seq, delim=', ', final='or'):
+
+def human_join(seq, delim=", ", final="or"):
     size = len(seq)
     if size == 0:
-        return ''
+        return ""
 
     if size == 1:
         return seq[0]
 
     if size == 2:
-        return f'{seq[0]} {final} {seq[1]}'
+        return f"{seq[0]} {final} {seq[1]}"
 
-    return delim.join(seq[:-1]) + f' {final} {seq[-1]}'
+    return delim.join(seq[:-1]) + f" {final} {seq[-1]}"
+
 
 class HumanTime:
     calendar = pdt.Calendar(version=pdt.VERSION_CONTEXT_STYLE)
@@ -73,28 +76,33 @@ class HumanTime:
     async def convert(cls, ctx, argument):
         return cls(argument, now=ctx.message.created_at)
 
+
 class ShortTime:
-    compiled = re.compile("""(?:(?P<years>[0-9])(?: years?|y))?             # e.g. 2y
+    compiled = re.compile(
+        """(?:(?P<years>[0-9])(?: years?|y))?             # e.g. 2y
                              (?:(?P<months>[0-9]{1,2})(?: months?|mo))?     # e.g. 2months
                              (?:(?P<weeks>[0-9]{1,4})(?: weeks?|w))?        # e.g. 10w
                              (?:(?P<days>[0-9]{1,5})(?: days?|d))?          # e.g. 14d
                              (?:(?P<hours>[0-9]{1,5})(?: hours?|h))?        # e.g. 12h
                              (?:(?P<minutes>[0-9]{1,5})(?: minutes?|m))?    # e.g. 10m
                              (?:(?P<seconds>[0-9]{1,5})(?: seconds?|s))?    # e.g. 15s
-                          """, re.VERBOSE)
+                          """,
+        re.VERBOSE,
+    )
 
     def __init__(self, argument, *, now=None):
         match = self.compiled.fullmatch(argument)
         if match is None or not match.group(0):
-            raise commands.BadArgument('invalid time provided')
+            raise commands.BadArgument("invalid time provided")
 
-        data = { k: int(v) for k, v in match.groupdict(default=0).items() }
+        data = {k: int(v) for k, v in match.groupdict(default=0).items()}
         now = now or datetime.datetime.utcnow()
         self.dt = now + relativedelta(**data)
 
     @classmethod
     async def convert(cls, ctx, argument):
         return cls(argument, now=ctx.message.created_at)
+
 
 class Time(HumanTime):
     def __init__(self, argument, *, now=None):
@@ -106,12 +114,14 @@ class Time(HumanTime):
             self.dt = o.dt
             self._past = False
 
+
 class FutureTime(Time):
     def __init__(self, argument, *, now=None):
         super().__init__(argument, now=now)
 
         if self._past:
-            raise commands.BadArgument('this time is in the past')
+            raise commands.BadArgument("this time is in the past")
+
 
 class HumanTime:
     calendar = pdt.Calendar()
@@ -136,24 +146,25 @@ class HumanTime:
 
 class UserFriendlyTime(commands.Converter):
     """That way quotes aren't absolutely necessary."""
+
     def __init__(self, converter=None, *, default=None):
         if isinstance(converter, type) and issubclass(converter, commands.Converter):
             converter = converter()
 
         if converter is not None and not isinstance(converter, commands.Converter):
             print(converter.__class__)
-            raise TypeError('commands.Converter subclass necessary.')
+            raise TypeError("commands.Converter subclass necessary.")
 
         self.converter = converter
         self.default = default
 
     async def check_constraints(self, ctx, now, remaining):
         if self.dt < now:
-            raise commands.BadArgument('This time is in the past.')
+            raise commands.BadArgument("This time is in the past.")
 
         if not remaining:
             if self.default is None:
-                raise commands.BadArgument('Missing argument after the time.')
+                raise commands.BadArgument("Missing argument after the time.")
             remaining = self.default
 
         if self.converter is not None:
@@ -163,21 +174,20 @@ class UserFriendlyTime(commands.Converter):
         return self
 
     async def convert(self, ctx, argument):
-        self = UserFriendlyTime(self.converter, default=self.default) # noqa
+        self = UserFriendlyTime(self.converter, default=self.default)  # noqa
 
         try:
             calendar = HumanTime.calendar
             now = datetime.datetime.utcnow()
 
-
             # apparently nlp does not like "from now"
             # it likes "from x" in other cases though so let me handle the 'now' case
-            if argument.endswith('from now'):
+            if argument.endswith("from now"):
                 argument = argument[:-8].strip()
 
-            if argument[0:2] == 'me':
+            if argument[0:2] == "me":
                 # starts with "me to", "me in", or "me at "
-                if argument[0:6] in ('me to ', 'me in ', 'me at '):
+                if argument[0:6] in ("me to ", "me in ", "me at "):
                     argument = argument[6:]
             if argument.startswith("in "):
                 argument = argument[3:]
@@ -200,14 +210,14 @@ class UserFriendlyTime(commands.Converter):
                 if begin == 1:
                     # check if it's quoted:
                     if argument[0] != '"':
-                        raise commands.BadArgument('Expected quote before time input...')
+                        raise commands.BadArgument("Expected quote before time input...")
 
                     if not (end < len(argument) and argument[end] == '"'):
-                        raise commands.BadArgument('If the time is quoted, you must unquote it.')
+                        raise commands.BadArgument("If the time is quoted, you must unquote it.")
 
-                    remaining = argument[end + 1:].lstrip(' ,.!')
+                    remaining = argument[end + 1 :].lstrip(" ,.!")
                 else:
-                    remaining = argument[end:].lstrip(' ,.!')
+                    remaining = argument[end:].lstrip(" ,.!")
             elif len(argument) == end:
                 remaining = argument[:begin].strip()
 
@@ -217,8 +227,10 @@ class UserFriendlyTime(commands.Converter):
             return await self.check_constraints(ctx, now, remaining)
         except:
             import traceback
+
             traceback.print_exc()
             raise
+
 
 def human_timedelta(dt, *, source=None, accuracy=3, brief=False, suffix=True):
     now = source or datetime.datetime.utcnow()
@@ -233,40 +245,40 @@ def human_timedelta(dt, *, source=None, accuracy=3, brief=False, suffix=True):
     # A query like "11 months" can be interpreted as "!1 months and 6 days"
     if dt > now:
         delta = relativedelta(dt, now)
-        suffix = ''
+        suffix = ""
     else:
         delta = relativedelta(now, dt)
-        suffix = ' ago' if suffix else ''
+        suffix = " ago" if suffix else ""
 
     attrs = [
-        ('year', 'y'),
-        ('month', 'mo'),
-        ('day', 'd'),
-        ('hour', 'h'),
-        ('minute', 'm'),
-        ('second', 's'),
+        ("year", "y"),
+        ("month", "mo"),
+        ("day", "d"),
+        ("hour", "h"),
+        ("minute", "m"),
+        ("second", "s"),
     ]
 
     output = []
     for attr, brief_attr in attrs:
-        elem = getattr(delta, attr + 's')
+        elem = getattr(delta, attr + "s")
         if not elem:
             continue
 
-        if attr == 'day':
+        if attr == "day":
             weeks = delta.weeks
             if weeks:
                 elem -= weeks * 7
                 if not brief:
-                    output.append(format(plural(weeks), 'week'))
+                    output.append(format(plural(weeks), "week"))
                 else:
-                    output.append(f'{weeks}w')
+                    output.append(f"{weeks}w")
 
         if elem <= 0:
             continue
 
         if brief:
-            output.append(f'{elem}{brief_attr}')
+            output.append(f"{elem}{brief_attr}")
         else:
             output.append(format(plural(elem), attr))
 
@@ -274,9 +286,9 @@ def human_timedelta(dt, *, source=None, accuracy=3, brief=False, suffix=True):
         output = output[:accuracy]
 
     if len(output) == 0:
-        return 'now'
+        return "now"
     else:
         if not brief:
-            return human_join(output, final='and') + suffix
+            return human_join(output, final="and") + suffix
         else:
-            return ' '.join(output) + suffix
+            return " ".join(output) + suffix

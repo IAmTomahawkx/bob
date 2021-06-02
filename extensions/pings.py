@@ -5,8 +5,10 @@ import json
 from discord.ext import commands
 from utils.context import Context
 
+
 def setup(bot):
     bot.add_cog(Bull(bot))
+
 
 class Bull(commands.Cog):
     def __init__(self, bot):

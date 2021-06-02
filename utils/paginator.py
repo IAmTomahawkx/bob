@@ -3,8 +3,10 @@ import asyncio
 import discord
 from discord.ext.commands import Paginator as CommandPaginator, CommandError
 
+
 class CannotPaginate(CommandError):
     pass
+
 
 class Pages:
     """Implements a paginator that queries the user for the
@@ -31,8 +33,22 @@ class Pages:
     permissions: discord.Permissions
         Our permissions for the channel.
     """
-    def __init__(self, ctx, *, entries, per_page=12, show_entry_count=True, title=None, embed_color = discord.Color.blurple(), nocount=False, delete_after=True,
-        author=None, author_url=None, stop=False):
+
+    def __init__(
+        self,
+        ctx,
+        *,
+        entries,
+        per_page=12,
+        show_entry_count=True,
+        title=None,
+        embed_color=discord.Color.blurple(),
+        nocount=False,
+        delete_after=True,
+        author=None,
+        author_url=None,
+        stop=False,
+    ):
         self.bot = ctx.bot
         self.stoppable = stop
         self.ctx = ctx
@@ -53,16 +69,14 @@ class Pages:
         self.paginating = len(entries) > per_page
         self.show_entry_count = show_entry_count
         self.reaction_emojis = [
-            ('\N{BLACK LEFT-POINTING DOUBLE TRIANGLE WITH VERTICAL BAR}', self.first_page),
-            ('\N{BLACK LEFT-POINTING TRIANGLE}', self.previous_page),
-            ('\N{BLACK RIGHT-POINTING TRIANGLE}', self.next_page),
-            ('\N{BLACK RIGHT-POINTING DOUBLE TRIANGLE WITH VERTICAL BAR}', self.last_page),
+            ("\N{BLACK LEFT-POINTING DOUBLE TRIANGLE WITH VERTICAL BAR}", self.first_page),
+            ("\N{BLACK LEFT-POINTING TRIANGLE}", self.previous_page),
+            ("\N{BLACK RIGHT-POINTING TRIANGLE}", self.next_page),
+            ("\N{BLACK RIGHT-POINTING DOUBLE TRIANGLE WITH VERTICAL BAR}", self.last_page),
         ]
 
         if stop:
-            self.reaction_emojis.append((
-                "\N{BLACK SQUARE FOR STOP}", self.stop_pages
-            ))
+            self.reaction_emojis.append(("\N{BLACK SQUARE FOR STOP}", self.stop_pages))
 
         if ctx.guild is not None:
             self.permissions = self.channel.permissions_for(ctx.guild.me)
@@ -70,22 +84,22 @@ class Pages:
             self.permissions = self.channel.permissions_for(ctx.bot.user)
 
         if not self.permissions.embed_links:
-            raise CannotPaginate('Bot does not have embed links permission.')
+            raise CannotPaginate("Bot does not have embed links permission.")
 
         if not self.permissions.send_messages:
-            raise CannotPaginate('Bot cannot send messages.')
+            raise CannotPaginate("Bot cannot send messages.")
 
         if self.paginating:
             # verify we can actually use the pagination session
             if not self.permissions.add_reactions:
-                raise CannotPaginate('Bot does not have add reactions permission.')
+                raise CannotPaginate("Bot does not have add reactions permission.")
 
             if not self.permissions.read_message_history:
-                raise CannotPaginate('Bot does not have Read Message History permission.')
+                raise CannotPaginate("Bot does not have Read Message History permission.")
 
     def get_page(self, page):
         base = (page - 1) * self.per_page
-        return self.entries[base:base + self.per_page]
+        return self.entries[base : base + self.per_page]
 
     def get_content(self, entries, page, *, first=False):
         return None
@@ -100,23 +114,23 @@ class Pages:
             if self.nocount:
                 p.append(entry)
             else:
-                p.append(f'{index}. {entry}')
+                p.append(f"{index}. {entry}")
 
         if self.maximum_pages > 1:
             if self.show_entry_count:
-                text = f'Page {page}/{self.maximum_pages} ({len(self.entries)} entries)'
+                text = f"Page {page}/{self.maximum_pages} ({len(self.entries)} entries)"
             else:
-                text = f'Page {page}/{self.maximum_pages}'
+                text = f"Page {page}/{self.maximum_pages}"
 
             self.embed.set_footer(text=text)
 
         if self.paginating and first:
-            p.append('')
+            p.append("")
 
         if self.embed_author[0]:
             self.embed.set_author(name=self.embed_author[0], icon_url=self.embed_author[1] or discord.Embed.Empty)
 
-        self.embed.description = '\n'.join(p)
+        self.embed.description = "\n".join(p)
         self.embed.title = self.title or discord.Embed.Empty
 
     async def show_page(self, page, *, first=False):
@@ -134,7 +148,7 @@ class Pages:
 
         self.message = await self.channel.send(content=content, embed=embed)
         for (reaction, _) in self.reaction_emojis:
-            if self.maximum_pages == 2 and reaction in ('\u23ed', '\u23ee'):
+            if self.maximum_pages == 2 and reaction in ("\u23ed", "\u23ee"):
                 # no |<< or >>| buttons if we only have two pages
                 # we can't forbid it if someone ends up using it but remove
                 # it from the default set
@@ -169,17 +183,15 @@ class Pages:
     async def numbered_page(self):
         """lets you type a page number to go to"""
         to_delete = []
-        to_delete.append(await self.channel.send('What page do you want to go to?'))
+        to_delete.append(await self.channel.send("What page do you want to go to?"))
 
         def message_check(m):
-            return m.author == self.author and \
-                   self.channel == m.channel and \
-                   m.content.isdigit()
+            return m.author == self.author and self.channel == m.channel and m.content.isdigit()
 
         try:
-            msg = await self.bot.wait_for('message', check=message_check, timeout=30.0)
+            msg = await self.bot.wait_for("message", check=message_check, timeout=30.0)
         except asyncio.TimeoutError:
-            to_delete.append(await self.channel.send('Took too long.'))
+            to_delete.append(await self.channel.send("Took too long."))
             await asyncio.sleep(5)
         else:
             page = int(msg.content)
@@ -187,7 +199,7 @@ class Pages:
             if page != 0 and page <= self.maximum_pages:
                 await self.show_page(page)
             else:
-                to_delete.append(await self.channel.send(f'Invalid page given. ({page}/{self.maximum_pages})'))
+                to_delete.append(await self.channel.send(f"Invalid page given. ({page}/{self.maximum_pages})"))
                 await asyncio.sleep(5)
 
         try:
@@ -197,17 +209,18 @@ class Pages:
 
     async def show_help(self):
         """shows this message"""
-        messages = ['Welcome to the interactive paginator!\n']
-        messages.append('This interactively allows you to see pages of text by navigating with ' \
-                        'reactions. They are as follows:\n')
+        messages = ["Welcome to the interactive paginator!\n"]
+        messages.append(
+            "This interactively allows you to see pages of text by navigating with " "reactions. They are as follows:\n"
+        )
 
         for (emoji, func) in self.reaction_emojis:
-            messages.append(f'{emoji} {func.__doc__}')
+            messages.append(f"{emoji} {func.__doc__}")
 
         embed = self.embed.copy()
         embed.clear_fields()
-        embed.description = '\n'.join(messages)
-        embed.set_footer(text=f'We were on page {self.current_page} before this message.')
+        embed.description = "\n".join(messages)
+        embed.set_footer(text=f"We were on page {self.current_page} before this message.")
         await self.message.edit(content=None, embed=embed)
 
         async def go_back_to_current_page():
@@ -245,7 +258,7 @@ class Pages:
 
         while self.paginating:
             try:
-                reaction, user = await self.bot.wait_for('reaction_add', check=self.react_check, timeout=60.0)
+                reaction, user = await self.bot.wait_for("reaction_add", check=self.react_check, timeout=60.0)
             except asyncio.TimeoutError:
                 self.paginating = False
                 if self.delete_after:
@@ -258,22 +271,45 @@ class Pages:
                 else:
                     try:
                         await self.message.clear_reactions()
-                    except: pass
-                    finally: break
+                    except:
+                        pass
+                    finally:
+                        break
 
             try:
                 await self.message.remove_reaction(reaction, user)
             except:
-                pass # can't remove it so don't bother doing so
+                pass  # can't remove it so don't bother doing so
 
             await self.match()
+
 
 class FieldPages(Pages):
     """Similar to Pages except entries should be a list of
     tuples having (key, value) to show as embed fields instead.
     """
-    def __init__(self, ctx, *, entries, per_page=12, show_entry_count=True, description=None, title=None, embed_color = discord.Color.blurple(), **kwargs):
-        super().__init__(ctx, entries=entries, per_page=per_page, show_entry_count=show_entry_count, title=title, embed_color=embed_color, **kwargs)
+
+    def __init__(
+        self,
+        ctx,
+        *,
+        entries,
+        per_page=12,
+        show_entry_count=True,
+        description=None,
+        title=None,
+        embed_color=discord.Color.blurple(),
+        **kwargs,
+    ):
+        super().__init__(
+            ctx,
+            entries=entries,
+            per_page=per_page,
+            show_entry_count=show_entry_count,
+            title=title,
+            embed_color=embed_color,
+            **kwargs,
+        )
         self.description = description
 
     def prepare_embed(self, entries, page, *, first=False):
@@ -286,18 +322,19 @@ class FieldPages(Pages):
 
         if self.maximum_pages > 1:
             if self.show_entry_count:
-                text = f'Page {page}/{self.maximum_pages} ({len(self.entries)} entries)'
+                text = f"Page {page}/{self.maximum_pages} ({len(self.entries)} entries)"
             else:
-                text = f'Page {page}/{self.maximum_pages}'
+                text = f"Page {page}/{self.maximum_pages}"
 
             self.embed.set_footer(text=text)
+
 
 class TextPages(Pages):
     """Uses a commands.Paginator internally to paginate some text."""
 
-    def __init__(self, ctx, text, *, prefix='```', suffix='```', max_size=2000, stop=False):
+    def __init__(self, ctx, text, *, prefix="```", suffix="```", max_size=2000, stop=False):
         paginator = CommandPaginator(prefix=prefix, suffix=suffix, max_size=max_size - 200)
-        for line in text.split('\n'):
+        for line in text.split("\n"):
             paginator.add_line(line)
 
         super().__init__(ctx, entries=paginator.pages, per_page=1, show_entry_count=False, stop=stop)
@@ -310,14 +347,34 @@ class TextPages(Pages):
 
     def get_content(self, entry, page, *, first=False):
         if self.maximum_pages > 1:
-            return f'{entry}\nPage {page}/{self.maximum_pages}'
+            return f"{entry}\nPage {page}/{self.maximum_pages}"
         return entry
 
+
 class EmbedPages(Pages):
-    """Similar to Pages except entries should be a list of embeds.
-    """
-    def __init__(self, ctx, *, entries, per_page=12, show_entry_count=True, description=None, title=None, embed_color = discord.Color.blurple(), **kwargs):
-        super().__init__(ctx, entries=entries, per_page=per_page, show_entry_count=show_entry_count, title=title, embed_color=embed_color, **kwargs)
+    """Similar to Pages except entries should be a list of embeds."""
+
+    def __init__(
+        self,
+        ctx,
+        *,
+        entries,
+        per_page=12,
+        show_entry_count=True,
+        description=None,
+        title=None,
+        embed_color=discord.Color.blurple(),
+        **kwargs,
+    ):
+        super().__init__(
+            ctx,
+            entries=entries,
+            per_page=per_page,
+            show_entry_count=show_entry_count,
+            title=title,
+            embed_color=embed_color,
+            **kwargs,
+        )
         self.description = description
 
     def prepare_embed(self, entries, page, *, first=False):
@@ -325,8 +382,8 @@ class EmbedPages(Pages):
 
         if self.maximum_pages > 1:
             if self.show_entry_count:
-                text = f'Page {page}/{self.maximum_pages} ({len(self.entries)} entries)'
+                text = f"Page {page}/{self.maximum_pages} ({len(self.entries)} entries)"
             else:
-                text = f'Page {page}/{self.maximum_pages}'
+                text = f"Page {page}/{self.maximum_pages}"
 
             self.embed.set_footer(text=text)

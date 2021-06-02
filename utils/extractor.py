@@ -15,19 +15,13 @@ EMOJI_RE = re.compile(_emoji_re)
 FAST_EMOJI_RE = re.compile(r"<a?:([a-zA-Z0-9_]+):([0-9]+)>")
 EMOJI_FULL_RE = re.compile(r"<a?:[a-zA-Z0-9_]{2,32}:[0-9]{18,22}>|" + _emoji_re)
 
-del _emoji_re # useless once it's compiled
+del _emoji_re  # useless once it's compiled
 
 ROLE_PING_RE = re.compile(r"<@&([0-9]+)>")
 DECAY_RE = re.compile(r"(\d+)/(\d+)(m|h|d|w|mo|y)")
 
-DECAY_INTERVAL = {
-    "m": 60,
-    "h": 3600,
-    "d": 86400,
-    "w": 604800,
-    "mo": 2592000,
-    "y": 31536000
-}
+DECAY_INTERVAL = {"m": 60, "h": 3600, "d": 86400, "w": 604800, "mo": 2592000, "y": 31536000}
+
 
 class CounterAction(TypedDict):
     counter: str
@@ -35,20 +29,25 @@ class CounterAction(TypedDict):
     condition: str
     target: Optional[str]
 
+
 class DispatchAction(TypedDict):
     dispatch: str
     condition: Optional[str]
+
 
 class LogAction(TypedDict):
     log: str
     event: str
     condition: Optional[str]
 
+
 class DoAction(TypedDict):
     do: str
     condition: Optional[str]
 
+
 Actions = Union[CounterAction, DispatchAction, LogAction, DoAction]
+
 
 class SelfRoleMode(Enum):
     reaction = "reaction"
@@ -62,6 +61,7 @@ class SelfRoleMode(Enum):
             return 2
         return 3
 
+
 class SelfRole(TypedDict):
     mode: SelfRoleMode
     roles: List[int]
@@ -71,6 +71,7 @@ class SelfRole(TypedDict):
     emoji: Optional[Union[str, int]]
     message: Optional[int]
 
+
 class ConfigCounter(TypedDict):
     name: str
     per_user: bool
@@ -78,14 +79,17 @@ class ConfigCounter(TypedDict):
     decay_rate: Optional[int]
     decay_per: Optional[int]
 
+
 class ConfigEvent(TypedDict):
     name: str
     actions: List[Actions]
+
 
 class Logger(TypedDict):
     name: str
     channel: int
     format: Union[Dict[str, str], str]
+
 
 class CommandArgumentType(Enum):
     user = "user"
@@ -94,41 +98,51 @@ class CommandArgumentType(Enum):
     num = "number"
     text = "text"
 
+
 class CommandArgument(TypedDict):
     name: str
     type: CommandArgumentType
     consume: int
+
 
 class Command(TypedDict):
     name: str
     arguments: List[CommandArgument]
     actions: List[Union[Actions, str]]
 
+
 class AutomodIgnore(TypedDict):
     roles: Optional[List[int]]
     channels: Optional[List[int]]
+
 
 class Automod(TypedDict):
     event: str
     ignore: Optional[AutomodIgnore]
     actions: List[Actions]
 
+
 class ConfigLoadError(Exception):
     def __init__(self, msg: str):
         self.msg = msg
         super().__init__(msg)
 
+
 class InvalidChannelReference(ConfigLoadError):
     pass
+
 
 class InvalidRoleReference(ConfigLoadError):
     pass
 
+
 class InvalidEmojiReference(ConfigLoadError):
     pass
 
+
 class AutoSelfRoleFailure(ConfigLoadError):
     pass
+
 
 async def parse_guild_config(cfg: str, ctx: Context) -> GuildConfig:
     config = GuildConfig(ctx.guild.id)
@@ -139,24 +153,25 @@ async def parse_guild_config(cfg: str, ctx: Context) -> GuildConfig:
         raise ConfigLoadError(f"The structure of the file is invalid: {err.msg}")
 
     if "selfrole" in parsed:
-        config.selfroles = await parse_guild_selfroles(ctx, parsed['selfrole'])
+        config.selfroles = await parse_guild_selfroles(ctx, parsed["selfrole"])
 
     if "counter" in parsed:
-        config.counters = await parse_guild_counters(parsed['counter'])
+        config.counters = await parse_guild_counters(parsed["counter"])
 
     if "event" in parsed:
-        config.events = await parse_guild_events(parsed['event'])
+        config.events = await parse_guild_events(parsed["event"])
 
     if "logging" in parsed:
-        config.loggers = await parse_guild_logging(ctx, parsed['logging'])
+        config.loggers = await parse_guild_logging(ctx, parsed["logging"])
 
     if "automod" in parsed:
-        config.automod_events = await parse_guild_automod(ctx, parsed['automod'])
+        config.automod_events = await parse_guild_automod(ctx, parsed["automod"])
 
     if "command" in parsed:
-        config.commands = await parse_guild_commands(parsed['command'])
+        config.commands = await parse_guild_commands(parsed["command"])
 
     return config
+
 
 async def parse_guild_selfroles(ctx: Context, cfg: Union[Dict[str, Any], List[Dict[str, Any]]]) -> List[SelfRole]:
     if isinstance(cfg, dict):
@@ -167,7 +182,9 @@ async def parse_guild_selfroles(ctx: Context, cfg: Union[Dict[str, Any], List[Di
     for i, r in enumerate(cfg):
         try:
             if not isinstance(r, dict):
-                raise ConfigLoadError(f"unable to parse selfrole #{i+1}. Expected a section, got {r.__class__.__name__}")
+                raise ConfigLoadError(
+                    f"unable to parse selfrole #{i+1}. Expected a section, got {r.__class__.__name__}"
+                )
 
             context = f"selfrole #{i+1}"
 
@@ -175,7 +192,7 @@ async def parse_guild_selfroles(ctx: Context, cfg: Union[Dict[str, Any], List[Di
                 parsed += await resolve_auto_selfrole(ctx, r, context)
                 continue
 
-            mode = SelfRoleMode(r['mode'])
+            mode = SelfRoleMode(r["mode"])
             roles = r.get("roles", None) or [r.get("role", None)]
 
             if not all(roles):
@@ -188,18 +205,18 @@ async def parse_guild_selfroles(ctx: Context, cfg: Union[Dict[str, Any], List[Di
                 "optin": bool(r.get("opt-in", True)),
                 "optout": bool(r.get("opt-out", True)),
                 "channel": None,
-                "emoji": None
+                "emoji": None,
             }
             if mode is SelfRoleMode.command:
                 parsed.append(resp)
                 continue
 
             elif mode is SelfRoleMode.button:
-                resp['channel'] = await resolve_channel(ctx, r['channel'], context)
-                resp['emoji'] = r.get("emoji", None) and await resolve_emoji(ctx, r['emoji'], context)
+                resp["channel"] = await resolve_channel(ctx, r["channel"], context)
+                resp["emoji"] = r.get("emoji", None) and await resolve_emoji(ctx, r["emoji"], context)
             else:
-                resp['channel'] = await resolve_channel(ctx, r['channel'], context)
-                resp['emoji'] = await resolve_emoji(ctx, r['emoji'], context)
+                resp["channel"] = await resolve_channel(ctx, r["channel"], context)
+                resp["emoji"] = await resolve_emoji(ctx, r["emoji"], context)
 
             parsed.append(resp)
 
@@ -208,15 +225,16 @@ async def parse_guild_selfroles(ctx: Context, cfg: Union[Dict[str, Any], List[Di
 
     return parsed
 
+
 async def resolve_auto_selfrole(ctx: Context, section: Dict[str, Any], context: str) -> List[SelfRole]:
     """
     automatically determines emojis - roles to use for reaction/button roles.
     if there is a role ping and an emoji on the same line of the linked message, it will become a selfrole.
     """
-    message = section['message']
+    message = section["message"]
     optin = bool(section.get("opt-in", True))
     optout = bool(section.get("opt-out", True))
-    mode = SelfRoleMode(section['mode'])
+    mode = SelfRoleMode(section["mode"])
 
     if mode is SelfRoleMode.command:
         raise AutoSelfRoleFailure(f"Cannot use auto-message loader with the `command` mode. ({context})")
@@ -252,11 +270,12 @@ async def resolve_auto_selfrole(ctx: Context, section: Dict[str, Any], context: 
             optout=optout,
             channel=msg.channel.id,
             message=msg.id,
-            emoji=emoji
+            emoji=emoji,
         )
         roles.append(r)
 
     return roles
+
 
 async def parse_guild_counters(section: Union[Dict[str, Any], List[Dict[str, Any]]]) -> Dict[str, ConfigCounter]:
     if isinstance(section, dict):
@@ -266,7 +285,7 @@ async def parse_guild_counters(section: Union[Dict[str, Any], List[Dict[str, Any
     for i, counter in enumerate(section):
         name = None
         try:
-            name = counter['name']
+            name = counter["name"]
             if name in resp:
                 raise ConfigLoadError(f"Duplicate counters with name '{name}'")
 
@@ -289,11 +308,7 @@ async def parse_guild_counters(section: Union[Dict[str, Any], List[Dict[str, Any
                 decay_per *= DECAY_INTERVAL[decay.group(3)]
 
             resp[name] = ConfigCounter(
-                name=name,
-                per_user=per_user,
-                initial_count=initial_count,
-                decay_rate=decay_rate,
-                decay_per=decay_per
+                name=name, per_user=per_user, initial_count=initial_count, decay_rate=decay_rate, decay_per=decay_per
             )
         except KeyError as e:
             if name:
@@ -303,6 +318,7 @@ async def parse_guild_counters(section: Union[Dict[str, Any], List[Dict[str, Any
 
     return resp
 
+
 async def parse_guild_events(cfg: Union[Dict[str, Any], List[Dict[str, Any]]]) -> List[ConfigEvent]:
     if isinstance(cfg, dict):
         cfg = [cfg]
@@ -311,10 +327,10 @@ async def parse_guild_events(cfg: Union[Dict[str, Any], List[Dict[str, Any]]]) -
     for i, event in enumerate(cfg):
         name = None
         try:
-            name = str(event['name'])
+            name = str(event["name"])
             context = f"Event '{name}' (#{i})"
             actions = []
-            for n, act in enumerate(event['actions']):
+            for n, act in enumerate(event["actions"]):
                 actions.append(await parse_action(act, context, n))
         except KeyError as e:
             if name:
@@ -322,12 +338,10 @@ async def parse_guild_events(cfg: Union[Dict[str, Any], List[Dict[str, Any]]]) -
             else:
                 raise ConfigLoadError(f"unable to parse event #{i + 1}. Missing the {e.args[0]} config key.")
 
-        resp.append(ConfigEvent(
-            name=name,
-            actions=actions
-        ))
+        resp.append(ConfigEvent(name=name, actions=actions))
 
     return resp
+
 
 async def parse_guild_logging(ctx: Context, cfg: Union[Dict[str, Any], List[Dict[str, Any]]]) -> Dict[str, Logger]:
     if isinstance(cfg, dict):
@@ -338,22 +352,18 @@ async def parse_guild_logging(ctx: Context, cfg: Union[Dict[str, Any], List[Dict
     for i, logger in enumerate(cfg):
         name = None
         try:
-            name = str(logger['name'])
+            name = str(logger["name"])
             if name in resp:
                 raise ConfigLoadError(f"Duplicate loggers with name '{name}'")
 
-            channel = await resolve_channel(ctx, logger['channel'], f"logging #{i}")
-            formats = logger['format']
+            channel = await resolve_channel(ctx, logger["channel"], f"logging #{i}")
+            formats = logger["format"]
             if isinstance(formats, dict):
-                formats = {str(x): str(t) for x, t in formats.items()} # make sure it's all strings
+                formats = {str(x): str(t) for x, t in formats.items()}  # make sure it's all strings
             else:
                 formats = str(formats)
 
-            resp[name] = Logger(
-                name=name,
-                channel=channel,
-                format=formats
-            )
+            resp[name] = Logger(name=name, channel=channel, format=formats)
 
         except KeyError as e:
             if name:
@@ -362,6 +372,7 @@ async def parse_guild_logging(ctx: Context, cfg: Union[Dict[str, Any], List[Dict
                 raise ConfigLoadError(f"unable to parse logger #{i + 1}. Missing the {e.args[0]} config key.")
 
     return resp
+
 
 async def parse_guild_automod(ctx: Context, cfg: Union[Dict[str, Any], List[Dict[str, Any]]]) -> List[Automod]:
     if isinstance(cfg, dict):
@@ -372,41 +383,44 @@ async def parse_guild_automod(ctx: Context, cfg: Union[Dict[str, Any], List[Dict
     for i, automod in enumerate(cfg):
         event = None
         try:
-            event = str(automod['event'])
+            event = str(automod["event"])
             context = f"automod '{event}' (#{i+1})"
             parsed_ignores = {"roles": [], "channels": []}
 
             ignores = automod.get("ignore")
             if ignores is not None and not isinstance(ignores, dict):
-                raise ConfigLoadError(f"Unable to parse automod ignores for {context}. Expected a dictionary, "
-                                      f"got {ignores.__class__.__name__}") # noqa
+                raise ConfigLoadError(
+                    f"Unable to parse automod ignores for {context}. Expected a dictionary, "
+                    f"got {ignores.__class__.__name__}"
+                )  # noqa
 
             elif ignores:
-                if "roles" in ignores and isinstance(ignores['roles'], list):
-                    parsed_ignores['roles'] = [await resolve_role(ctx, x, context) for x in ignores['roles']]
+                if "roles" in ignores and isinstance(ignores["roles"], list):
+                    parsed_ignores["roles"] = [await resolve_role(ctx, x, context) for x in ignores["roles"]]
 
-                if "channels" in ignores and isinstance(ignores['channels'], list):
-                    parsed_ignores['channels'] = [await resolve_channel(ctx, x, context) for x in ignores['channels']]
+                if "channels" in ignores and isinstance(ignores["channels"], list):
+                    parsed_ignores["channels"] = [await resolve_channel(ctx, x, context) for x in ignores["channels"]]
 
-            if not isinstance(automod['actions'], list):
-                raise ConfigLoadError(f"Unable to parse actions for {context}. Expected an array, got "
-                                      f"{automod['actions'].__class__.__name__}")
+            if not isinstance(automod["actions"], list):
+                raise ConfigLoadError(
+                    f"Unable to parse actions for {context}. Expected an array, got "
+                    f"{automod['actions'].__class__.__name__}"
+                )
 
-            actions = [await parse_action(x, context, n) for n, x in enumerate(automod['actions'])]
+            actions = [await parse_action(x, context, n) for n, x in enumerate(automod["actions"])]
 
-            resp.append(Automod(
-                event=event,
-                ignore=ignores,
-                actions=actions
-            ))
+            resp.append(Automod(event=event, ignore=ignores, actions=actions))
 
         except KeyError as e:
             if event:
-                raise ConfigLoadError(f"Unable to parse automod '{event}' (#{i+1}). Missing the {e.args[0]} config key.")
+                raise ConfigLoadError(
+                    f"Unable to parse automod '{event}' (#{i+1}). Missing the {e.args[0]} config key."
+                )
             else:
                 raise ConfigLoadError(f"unable to parse automod #{i + 1}. Missing the {e.args[0]} config key.")
 
     return resp
+
 
 async def parse_guild_commands(cfg: Union[Dict[str, Any], List[Dict[str, Any]]]) -> Dict[str, Command]:
     if isinstance(cfg, dict):
@@ -417,28 +431,33 @@ async def parse_guild_commands(cfg: Union[Dict[str, Any], List[Dict[str, Any]]])
     for i, cmd in enumerate(cfg):
         name = None
         try:
-            name = str(cmd['name'])
+            name = str(cmd["name"])
             context = f"command '{name}'"
             arguments = []
-            if not isinstance(cmd['arguments'], list):
-                raise ConfigLoadError(f"Unable to parse arguments for {context}. Expected an array, got "
-                                      f"{cmd['arguments'].__class__.__name__}")
+            if not isinstance(cmd["arguments"], list):
+                raise ConfigLoadError(
+                    f"Unable to parse arguments for {context}. Expected an array, got "
+                    f"{cmd['arguments'].__class__.__name__}"
+                )
 
-            for n, arg in enumerate(cmd['arguments']):
+            for n, arg in enumerate(cmd["arguments"]):
                 if not isinstance(arg, dict):
-                    raise ConfigLoadError(f"Unable to parse argument #{n+1} for {context}. Expected a dictionary, got "
-                                          f"{arg.__class__.__name__}")
+                    raise ConfigLoadError(
+                        f"Unable to parse argument #{n+1} for {context}. Expected a dictionary, got "
+                        f"{arg.__class__.__name__}"
+                    )
 
                 try:
-                    _name = str(arg['name'])
-                    _type = CommandArgumentType(arg['type'])
+                    _name = str(arg["name"])
+                    _type = CommandArgumentType(arg["type"])
                     consume = arg.get("consume", "1")
                     try:
                         consume = int(consume)
                         if consume <= 0:
                             raise ConfigLoadError(
                                 f"Unable to parse argument #{n+1} for {context}. Expected a positive "
-                                f"value, minimum value (i.e. '1+'), or \"all\" for `consume`")
+                                f"value, minimum value (i.e. '1+'), or \"all\" for `consume`"
+                            )
                     except ValueError:
                         if consume == "all":
                             consume = 0
@@ -448,28 +467,24 @@ async def parse_guild_commands(cfg: Union[Dict[str, Any], List[Dict[str, Any]]])
                             except ValueError:
                                 raise ConfigLoadError(
                                     f"Unable to parse argument #{n + 1} for {context}. Expected a positive "
-                                    f"value, minimum value (i.e. '1+'), or \"all\" for `consume`")
+                                    f"value, minimum value (i.e. '1+'), or \"all\" for `consume`"
+                                )
                 except KeyError as e:
-                    raise ConfigLoadError(f"Unable to parse argument #{n + 1} for {context}. Missing the '{e.args[0]}' "
-                                          "config key")
+                    raise ConfigLoadError(
+                        f"Unable to parse argument #{n + 1} for {context}. Missing the '{e.args[0]}' " "config key"
+                    )
 
-                arguments.append(CommandArgument(
-                    name=_name,
-                    type=_type,
-                    consume=consume
-                ))
+                arguments.append(CommandArgument(name=_name, type=_type, consume=consume))
 
-            if not isinstance(cmd['actions'], list):
-                raise ConfigLoadError(f"Unable to parse actions for {context}. Expected an array, got "
-                                      f"{cmd['actions'].__class__.__name__}")
+            if not isinstance(cmd["actions"], list):
+                raise ConfigLoadError(
+                    f"Unable to parse actions for {context}. Expected an array, got "
+                    f"{cmd['actions'].__class__.__name__}"
+                )
 
-            actions = [await parse_action(x, context, n) for n, x in enumerate(cmd['actions'])]
+            actions = [await parse_action(x, context, n) for n, x in enumerate(cmd["actions"])]
 
-            resp[name] = Command(
-                name=name,
-                arguments=arguments,
-                actions=actions
-            )
+            resp[name] = Command(name=name, arguments=arguments, actions=actions)
         except KeyError as e:
             if name:
                 raise ConfigLoadError(f"Unable to parse command '{name}' (#{i+1}). Missing the {e.args[0]} config key.")
@@ -478,44 +493,42 @@ async def parse_guild_commands(cfg: Union[Dict[str, Any], List[Dict[str, Any]]])
 
     return resp
 
+
 async def parse_action(action: Dict[str, Any], context: str, n: int) -> Actions:
     if "counter" in action:
         try:
             return CounterAction(
-                counter=str(action['counter']),
-                modify=int(action['modify']),
-                target=action.get("target") and str(action['target']),
-                condition=action.get("if") and str(action['if'])
+                counter=str(action["counter"]),
+                modify=int(action["modify"]),
+                target=action.get("target") and str(action["target"]),
+                condition=action.get("if") and str(action["if"]),
             )
         except KeyError as e:
-            raise ConfigLoadError(f"Failed to parse actions ({context}, #{n}). "
-                                  f"Required key '{e.args[0]}' for action type 'counter' is missing")
+            raise ConfigLoadError(
+                f"Failed to parse actions ({context}, #{n}). "
+                f"Required key '{e.args[0]}' for action type 'counter' is missing"
+            )
 
     elif "dispatch" in action:
-        return DispatchAction(
-            dispatch=str(action['dispatch']),
-            condition=action.get("if") and str(action['if'])
-        )
+        return DispatchAction(dispatch=str(action["dispatch"]), condition=action.get("if") and str(action["if"]))
 
     elif "log" in action:
         try:
             return LogAction(
-                log=str(action['log']),
-                event=str(action['event']),
-                condition=action.get("if") and str(action['if'])
+                log=str(action["log"]), event=str(action["event"]), condition=action.get("if") and str(action["if"])
             )
         except KeyError as e:
-            raise ConfigLoadError(f"Failed to parse actions ({context}, #{n}). "
-                                  f"Required key '{e.args[0]}' for action type 'log' is missing")
+            raise ConfigLoadError(
+                f"Failed to parse actions ({context}, #{n}). "
+                f"Required key '{e.args[0]}' for action type 'log' is missing"
+            )
 
     elif "do" in action:
-        return DoAction(
-            do=str(action['do']),
-            condition=action.get("if") and str(action['if'])
-        )
+        return DoAction(do=str(action["do"]), condition=action.get("if") and str(action["if"]))
 
     else:
         raise ConfigLoadError(f"Failed to parse actions ({context}, #{n}). Unknown action")
+
 
 async def resolve_channel(ctx: Context, arg: Union[str, int], parse_context: str) -> int:
     if isinstance(arg, int):
@@ -530,10 +543,13 @@ async def resolve_channel(ctx: Context, arg: Union[str, int], parse_context: str
         raise InvalidChannelReference(f"The referenced channel, {arg}, ({parse_context}), is invalid (not found).")
 
     if len(channels) > 1:
-        raise InvalidChannelReference(f"There are multiple channels named {arg}, refusing to infer the correct one. "
-                                      f"Maybe use a channel id? ({parse_context})")
+        raise InvalidChannelReference(
+            f"There are multiple channels named {arg}, refusing to infer the correct one. "
+            f"Maybe use a channel id? ({parse_context})"
+        )
 
     return channels[0].id
+
 
 async def resolve_role(ctx: Context, arg: Union[str, int], parse_context: str) -> int:
     if isinstance(arg, int):
@@ -548,10 +564,13 @@ async def resolve_role(ctx: Context, arg: Union[str, int], parse_context: str) -
         raise InvalidChannelReference(f"The referenced role, {arg}, ({parse_context}), is invalid (not found).")
 
     if len(roles) > 1:
-        raise InvalidChannelReference(f"There are multiple roles named {arg}, refusing to infer the correct one. "
-                                      f"Maybe use a role id? ({parse_context})")
+        raise InvalidChannelReference(
+            f"There are multiple roles named {arg}, refusing to infer the correct one. "
+            f"Maybe use a role id? ({parse_context})"
+        )
 
     return roles[0].id
+
 
 async def resolve_emoji(ctx: Context, arg: Union[str, int], parse_context: str) -> Union[str, int]:
     if isinstance(arg, int):
@@ -572,7 +591,8 @@ async def resolve_emoji(ctx: Context, arg: Union[str, int], parse_context: str) 
 
 
 async def resolve_user(ctx: Context, arg: Union[str, int], parse_context: str) -> int:
-    pass # TODO
+    pass  # TODO
+
 
 class GuildConfig:
     def __init__(self, guild_id: int):
