@@ -391,8 +391,8 @@ async def parse_guild_automod(ctx: Context, cfg: Union[Dict[str, Any], List[Dict
             if ignores is not None and not isinstance(ignores, dict):
                 raise ConfigLoadError(
                     f"Unable to parse automod ignores for {context}. Expected a dictionary, "
-                    f"got {ignores.__class__.__name__}"
-                )  # noqa
+                    f"got {ignores.__class__.__name__}" # noqa
+                )
 
             elif ignores:
                 if "roles" in ignores and isinstance(ignores["roles"], list):
