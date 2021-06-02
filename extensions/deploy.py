@@ -3,13 +3,13 @@ from discord.ext import commands
 from utils.bot import Bot
 from utils import extractor, context
 
+
 def setup(bot: Bot):
     bot.add_cog(Config(bot))
 
-STEPS = [
-    "Parsing configuration file",
-    "Updating selfroles"
-]
+
+STEPS = ["Parsing configuration file", "Updating selfroles"]
+
 
 class Config(commands.Cog):
     def __init__(self, bot: Bot):
@@ -18,6 +18,7 @@ class Config(commands.Cog):
     async def deploy_config(self, ctx: context.Context, cfg: str):
         content = "Deploying new configuration:\n"
         step = 1
+
         async def update_msg(err=None, success=False):
             nonlocal ctx, content, step, msg
             _cont = "\n".join(f"{i+1}. {x}" for i, x in enumerate(STEPS) if i < step)

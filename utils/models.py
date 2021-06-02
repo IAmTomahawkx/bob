@@ -17,8 +17,9 @@ __all__ = (
     "Logger",
     "Automod",
     "AutomodIgnore",
-    "GuildConfig"
+    "GuildConfig",
 )
+
 
 class CounterAction(TypedDict):
     counter: str
@@ -45,6 +46,7 @@ class DoAction(TypedDict):
 
 Actions = Union[CounterAction, DispatchAction, LogAction, DoAction]
 
+
 class SelfRoleMode(Enum):
     reaction = "reaction"
     button = "button"
@@ -60,11 +62,11 @@ class SelfRoleMode(Enum):
     @staticmethod
     def from_int(n: int) -> "SelfRoleMode":
         if n == 1:
-            return SelfRoleMode.reaction # noqa
+            return SelfRoleMode.reaction  # noqa
         elif n == 2:
-            return SelfRoleMode.button # noqa
+            return SelfRoleMode.button  # noqa
         elif n == 3:
-            return SelfRoleMode.command # noqa
+            return SelfRoleMode.command  # noqa
         else:
             raise ValueError("Number was not a valid mode")
 
@@ -127,6 +129,7 @@ class Automod(TypedDict):
     event: str
     ignore: Optional[AutomodIgnore]
     actions: List[Actions]
+
 
 class GuildConfig:
     def __init__(self, guild_id: int):

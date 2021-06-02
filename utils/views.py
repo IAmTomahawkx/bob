@@ -3,8 +3,10 @@ import os
 from typing import List, Tuple, Dict
 from .models import SelfRole
 
+
 async def _dummy_callback(*args):
     pass
+
 
 def create_selfrole_view(guild: discord.Guild, models: List[SelfRole]) -> Tuple[discord.ui.View, Dict[int, str]]:
     rows = {}
@@ -14,10 +16,10 @@ def create_selfrole_view(guild: discord.Guild, models: List[SelfRole]) -> Tuple[
             super().__init__(None)
 
             for m in models:
-                for role in m['roles']:
+                for role in m["roles"]:
                     text = emoji = None
-                    if m['emoji']:
-                        emoji = discord.utils.get(guild.emojis, id=m['emoji'])
+                    if m["emoji"]:
+                        emoji = discord.utils.get(guild.emojis, id=m["emoji"])
                         emoji = discord.PartialEmoji(name=emoji.name, animated=emoji.animated, id=emoji.id)
                     else:
                         text = guild.get_role(role)

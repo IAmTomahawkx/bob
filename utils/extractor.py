@@ -493,4 +493,3 @@ async def resolve_emoji(ctx: Context, arg: Union[str, int], parse_context: str) 
 
 async def resolve_user(ctx: Context, arg: Union[str, int], parse_context: str) -> int:
     pass  # TODO
-
