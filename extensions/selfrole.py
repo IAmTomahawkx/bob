@@ -27,31 +27,31 @@ class SelfRoles(commands.Cog, name="Self Roles"):
             return
 
         query = "SELECT role_id, optin, optout FROM selfroles_roles INNER JOIN selfroles s on selfroles_roles.cfg_id = s.id WHERE interaction_cid = $1"
-        data = await self.bot.db.fetchrow(query, interation.data['custom_id'])
+        data = await self.bot.db.fetchrow(query, interation.data["custom_id"])
 
         if not data:
             return
 
-        #await interation.response.defer()
+        # await interation.response.defer()
 
         member: List[discord.Member] = await interation.guild.query_members(user_ids=[interation.user.id])
-        if not member: # ???
+        if not member:  # ???
             print("no member?")
             return
 
         member: discord.Member = member[0]
-        role: discord.Role = interation.guild.get_role(data['role_id'])  # noqa
+        role: discord.Role = interation.guild.get_role(data["role_id"])  # noqa
 
-        if discord.utils.get(member.roles, id=data['role_id']):
-            if data['optout']:
-                await member.remove_roles(role) # noqa
+        if discord.utils.get(member.roles, id=data["role_id"]):
+            if data["optout"]:
+                await member.remove_roles(role)  # noqa
                 await interation.response.send_message(f"You no longer have the {role.mention} role", ephemeral=True)
             else:
                 await interation.response.send_message(f"You cannot opt out of the {role.mention} role", ephemeral=True)
 
         else:
-            if data['optin']:
-                await member.add_roles(role) # noqa
+            if data["optin"]:
+                await member.add_roles(role)  # noqa
                 await interation.response.send_message(f"You now have the {role.mention} role", ephemeral=True)
             else:
                 await interation.response.send_message(f"You cannot opt in to the {role.mention} role", ephemeral=True)
@@ -64,8 +64,10 @@ class SelfRoles(commands.Cog, name="Self Roles"):
         if not payload.guild_id:
             return
 
-        query = "SELECT role_id, optin FROM selfroles_roles INNER JOIN selfroles s on s.id = selfroles_roles.cfg_id " \
-                "WHERE s.guild_id = $1 AND msg_id = $2 AND reaction = $3"
+        query = (
+            "SELECT role_id, optin FROM selfroles_roles INNER JOIN selfroles s on s.id = selfroles_roles.cfg_id "
+            "WHERE s.guild_id = $1 AND msg_id = $2 AND reaction = $3"
+        )
         s = await self.bot.db.fetchrow(
             query,
             payload.guild_id,
@@ -101,8 +103,10 @@ class SelfRoles(commands.Cog, name="Self Roles"):
         if not payload.guild_id:
             return
 
-        query = "SELECT role_id, optout FROM selfroles_roles INNER JOIN selfroles s on s.id = selfroles_roles.cfg_id " \
-                "WHERE s.guild_id = $1 AND msg_id = $2 AND reaction = $3"
+        query = (
+            "SELECT role_id, optout FROM selfroles_roles INNER JOIN selfroles s on s.id = selfroles_roles.cfg_id "
+            "WHERE s.guild_id = $1 AND msg_id = $2 AND reaction = $3"
+        )
         s = await self.bot.db.fetchrow(
             query,
             payload.guild_id,
@@ -181,7 +185,7 @@ class SelfRoles(commands.Cog, name="Self Roles"):
             sid = await conn.fetchval(query, x["mode"].to_int(), cfg.guild_id, x["optin"], x["optout"])
             await conn.executemany(
                 "INSERT INTO selfroles_roles (cfg_id, role_id, msg_id, channel_id, reaction) VALUES ($1, $2, $3, $4, $5)",
-                [(sid, r, msg.id, chnl.id, str(x['emoji'])) for r in x["roles"]]
+                [(sid, r, msg.id, chnl.id, str(x["emoji"])) for r in x["roles"]],
             )
 
         buttons = itertools.groupby(
@@ -213,22 +217,19 @@ class SelfRoles(commands.Cog, name="Self Roles"):
             ((SELECT id FROM ins), $5, $6, $7, $8)
             """
             p = [
-                    (
-                        models.SelfRoleMode.button.to_int(),
-                        guild.id,
-                        t["optin"],
-                        t["optout"],
-                        t["roles"][0],
-                        msg.id,
-                        chnl.id,
-                        cids[t["roles"][0]],
-                    )
-                    for t in roles
-                ]
-            await conn.executemany(
-                query,
-                p
-            )
+                (
+                    models.SelfRoleMode.button.to_int(),
+                    guild.id,
+                    t["optin"],
+                    t["optout"],
+                    t["roles"][0],
+                    msg.id,
+                    chnl.id,
+                    cids[t["roles"][0]],
+                )
+                for t in roles
+            ]
+            await conn.executemany(query, p)
 
     @commands.group(aliases=["sr", "role"])
     @commands.guild_only()
