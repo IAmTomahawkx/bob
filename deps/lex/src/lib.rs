@@ -118,8 +118,6 @@ fn arglex(py: Python, m: &PyModule)-> PyResult<()> {
             .map(|(tok, spn)| Token::from_token(&input, tok, spn))
             .collect::<Vec<Token>>();
 
-        println!("{:?}", &tokens);
-
         Ok(tokens)
     }
 
