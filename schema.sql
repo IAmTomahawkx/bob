@@ -24,5 +24,6 @@ CREATE TABLE IF NOT EXISTS selfroles_roles
     role_id BIGINT NOT NULL,
     msg_id BIGINT,
     channel_id BIGINT,
-    interaction_cid TEXT
+    interaction_cid TEXT,
+    reaction TEXT
 );

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import itertools
+from typing import List
 
 import asyncpg
 import discord
@@ -25,18 +26,46 @@ class SelfRoles(commands.Cog, name="Self Roles"):
         if interation.type is not discord.InteractionType.component:
             return
 
-        query = "SELECT role_id, interaction_cid FROM selfroles_roles WHERE interaction_id = $1"
-        data = await self.bot.db.fetchrow(query)
+        query = "SELECT role_id, optin, optout FROM selfroles_roles INNER JOIN selfroles s on selfroles_roles.cfg_id = s.id WHERE interaction_cid = $1"
+        data = await self.bot.db.fetchrow(query, interation.data['custom_id'])
+
+        if not data:
+            return
+
+        #await interation.response.defer()
+
+        member: List[discord.Member] = await interation.guild.query_members(user_ids=[interation.user.id])
+        if not member: # ???
+            print("no member?")
+            return
+
+        member: discord.Member = member[0]
+        role: discord.Role = interation.guild.get_role(data['role_id'])  # noqa
+
+        if discord.utils.get(member.roles, id=data['role_id']):
+            if data['optout']:
+                await member.remove_roles(role) # noqa
+                await interation.response.send_message(f"You no longer have the {role.mention} role", ephemeral=True)
+            else:
+                await interation.response.send_message(f"You cannot opt out of the {role.mention} role", ephemeral=True)
+
+        else:
+            if data['optin']:
+                await member.add_roles(role) # noqa
+                await interation.response.send_message(f"You now have the {role.mention} role", ephemeral=True)
+            else:
+                await interation.response.send_message(f"You cannot opt in to the {role.mention} role", ephemeral=True)
 
     @commands.Cog.listener()
-    async def on_raw_reaction_add(self, payload):
+    async def on_raw_reaction_add(self, payload: discord.RawReactionActionEvent):
         if self.bot.get_user(payload.user_id).bot:  # noqa
             return
 
         if not payload.guild_id:
             return
 
-        query = "SELECT role_id, mode FROM reaction_roles WHERE guild_id = $1 AND message_id = $2 AND emoji_id = $3"
+        query = "SELECT role_id, optin FROM selfroles_roles INNER JOIN selfroles s on s.id = selfroles_roles.cfg_id " \
+                "WHERE s.guild_id = $1 AND msg_id = $2 AND reaction = $3"
         s = await self.bot.db.fetchrow(
             query,
             payload.guild_id,
@@ -46,8 +75,8 @@ class SelfRoles(commands.Cog, name="Self Roles"):
         if s is None:
             return
 
-        match, mode = s
-        if match and mode in (1, 3):
+        match, optin = s
+        if optin:
             guild = self.bot.get_guild(payload.guild_id)
             member = guild.get_member(payload.user_id)
             try:
@@ -55,7 +84,7 @@ class SelfRoles(commands.Cog, name="Self Roles"):
             except discord.HTTPException:
                 if not guild.get_role(match):
                     await self.bot.db.execute(
-                        "DELETE FROM reaction_roles WHERE role_id = $1", match
+                        "DELETE FROM selfroles_roles WHERE role_id = $1", match
                     )  # the role has been deleted
                     return
 
@@ -66,10 +95,14 @@ class SelfRoles(commands.Cog, name="Self Roles"):
 
     @commands.Cog.listener()
     async def on_raw_reaction_remove(self, payload: discord.RawReactionActionEvent):
+        if self.bot.get_user(payload.user_id).bot:  # noqa
+            return
+
         if not payload.guild_id:
             return
 
-        query = "SELECT role_id, mode FROM reaction_roles WHERE guild_id = $1 AND message_id = $2 AND emoji_id = $3"
+        query = "SELECT role_id, optout FROM selfroles_roles INNER JOIN selfroles s on s.id = selfroles_roles.cfg_id " \
+                "WHERE s.guild_id = $1 AND msg_id = $2 AND reaction = $3"
         s = await self.bot.db.fetchrow(
             query,
             payload.guild_id,
@@ -79,15 +112,17 @@ class SelfRoles(commands.Cog, name="Self Roles"):
         if s is None:
             return
 
-        match, mode = s
-        if match and mode in (2, 3):
+        match, optout = s
+        if optout:
             guild = self.bot.get_guild(payload.guild_id)
             member = guild.get_member(payload.user_id)
             try:
                 await member.remove_roles(discord.Object(id=match))
             except discord.HTTPException:
                 if not guild.get_role(match):
-                    await self.bot.db.execute("DELETE FROM reaction_roles WHERE role_id = $1", match)
+                    await self.bot.db.execute(
+                        "DELETE FROM selfroles_roles WHERE role_id = $1", match
+                    )  # the role has been deleted
                     return
 
                 await guild.get_channel(payload.channel_id).send(
@@ -145,7 +180,8 @@ class SelfRoles(commands.Cog, name="Self Roles"):
             query = "INSERT INTO selfroles (mode, guild_id, optin, optout) VALUES ($1, $2, $3, $4) RETURNING id"
             sid = await conn.fetchval(query, x["mode"].to_int(), cfg.guild_id, x["optin"], x["optout"])
             await conn.executemany(
-                "INSERT INTO selfroles_roles VALUES ($1, $2, $3, $4)", [(sid, r, msg.id, chnl.id) for r in x["roles"]]
+                "INSERT INTO selfroles_roles (cfg_id, role_id, msg_id, channel_id, reaction) VALUES ($1, $2, $3, $4, $5)",
+                [(sid, r, msg.id, chnl.id, str(x['emoji'])) for r in x["roles"]]
             )
 
         buttons = itertools.groupby(
@@ -176,9 +212,7 @@ class SelfRoles(commands.Cog, name="Self Roles"):
             VALUES
             ((SELECT id FROM ins), $5, $6, $7, $8)
             """
-            await conn.executemany(
-                query,
-                [
+            p = [
                     (
                         models.SelfRoleMode.button.to_int(),
                         guild.id,
@@ -189,22 +223,25 @@ class SelfRoles(commands.Cog, name="Self Roles"):
                         chnl.id,
                         cids[t["roles"][0]],
                     )
-                    for t in x
-                ],
+                    for t in roles
+                ]
+            await conn.executemany(
+                query,
+                p
             )
 
-    @commands.group(aliases=["rr"])
+    @commands.group(aliases=["sr", "role"])
     @commands.guild_only()
     @commands.has_permissions(manage_guild=True)
     @commands.bot_has_guild_permissions(manage_roles=True, add_reactions=True)
-    async def reactionrole(self, ctx: Context):
+    async def selfrole(self, ctx: Context):
         """
         allows for the creation of reaction roles! react on a message, get the corresponding role!
         Use `reactionrole add` to add a new reaction role!
         """
         await ctx.send_help(ctx.command)
 
-    @reactionrole.command(aliases=["+"])
+    @selfrole.command(aliases=["+"])
     @commands.guild_only()
     @commands.has_permissions(manage_guild=True)
     @commands.bot_has_guild_permissions(manage_roles=True, add_reactions=True)
@@ -221,8 +258,7 @@ class SelfRoles(commands.Cog, name="Self Roles"):
         mode = None
         while not mode:
             _mode = await ctx.ask(
-                "please respond with the mode you wish to set this reaction role to.\n```\n1: add on reaction\n2: remove "
-                "on reaction\n3:add on reaction add, remove on reaction removal\n```",
+                "Please respond with the medium you wish to use for this selfrole",
                 return_bool=False,
                 reply=True,
             )
@@ -309,7 +345,7 @@ class SelfRoles(commands.Cog, name="Self Roles"):
         )
         await ctx.send("Complete!")
 
-    @reactionrole.command()
+    @selfrole.command()
     @commands.guild_only()
     @commands.has_permissions(manage_guild=True)
     @commands.bot_has_guild_permissions(manage_roles=True, add_reactions=True)

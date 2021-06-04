@@ -32,6 +32,4 @@ def create_selfrole_view(guild: discord.Guild, models: List[SelfRole]) -> Tuple[
                     b.callback = _dummy_callback
                     self.add_item(b)
 
-            print(self.children)
-
     return View(), rows
