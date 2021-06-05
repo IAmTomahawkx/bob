@@ -23,17 +23,14 @@ __all__ = (
     "GuildConfig",
 )
 
+
 class ActionTypes:
     counter = 1
     dispatch = 2
     log = 3
     do = 4
-    reversed = {
-        1: "counter",
-        2: "dispatch",
-        3: "log",
-        4: "do"
-    }
+    reversed = {1: "counter", 2: "dispatch", 3: "log", 4: "do"}
+
 
 class AnyAction(TypedDict):
     id: int
@@ -45,6 +42,7 @@ class AnyAction(TypedDict):
     event: Optional[str]
     args: Dict[str, Union[str, int, bool]]
 
+
 class CounterAction(TypedDict):
     counter: str
     modify: int
@@ -55,6 +53,7 @@ class CounterAction(TypedDict):
 class DispatchAction(TypedDict):
     dispatch: str
     condition: Optional[str]
+
 
 class LogAction(TypedDict):
     log: str
@@ -111,8 +110,10 @@ class ConfigCounter(TypedDict):
     decay_rate: Optional[int]
     decay_per: Optional[int]
 
+
 class ConfiguredCounter(ConfigCounter):
     id: int
+
 
 class ConfigEvent(TypedDict):
     name: str
@@ -166,6 +167,7 @@ class GuildConfig:
         self.automod_events = []
         self.loggers = {}
         self.commands = {}
+
 
 class SparseGuildConfig:
     def __init__(self, guild_id: int):

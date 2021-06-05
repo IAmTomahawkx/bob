@@ -15,7 +15,7 @@ from . import time
 from .context import Context
 from .models import *
 
-__all__ = "Bot",
+__all__ = ("Bot",)
 
 
 class _CaseInsensitiveDict(dict):
@@ -68,7 +68,7 @@ class Bot(commands.Bot):
         self.db: asyncpg.pool.Pool = None  # noqa
 
         intents = discord.Intents.default()
-        intents.members = True # noqa
+        intents.members = True  # noqa
         allowed_mentions = discord.AllowedMentions.none()
         super().__init__(get_pre, intents=intents, allowed_mentions=allowed_mentions, **settings)
 

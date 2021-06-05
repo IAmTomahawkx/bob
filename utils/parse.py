@@ -10,6 +10,7 @@ from .bot import Bot
 
 PARSE_VARS = Optional[Dict[str, Union[str, int, bool]]]
 
+
 class ExecutionInterrupt(Exception):
     def __init__(self, msg: str, stack: List[str]):
         self.msg = msg
@@ -20,6 +21,7 @@ class ExecutionInterrupt(Exception):
         stack = "\n".join([f"at {x}" for x in self.stack])
         return f"```\n{stack}\n~~~\n{self.msg}\n```"
 
+
 class ParsingContext:
     def __init__(self, bot: Bot, guild: discord.Guild, invoker: Optional[discord.Member]):
         self.bot = bot
@@ -29,7 +31,7 @@ class ParsingContext:
         self._cfg_id: Optional[int] = None
         self.events = {}
         self.loggers = {}
-        self.counters = {} # lazy filled, don't assume the counter is in this
+        self.counters = {}  # lazy filled, don't assume the counter is in this
         self.commands = {}
         self.automod = []
         self.actions = {}
@@ -62,20 +64,20 @@ class ParsingContext:
 
         self.events = {}
         for x in events:
-            if x['name'] in self.events:
-                self.events[x['name']].append({"id": x['id'], "actions": x['actions']})
+            if x["name"] in self.events:
+                self.events[x["name"]].append({"id": x["id"], "actions": x["actions"]})
             else:
-                self.events[x['name']] = [{"id": x['id'], "actions": x['actions']}]
+                self.events[x["name"]] = [{"id": x["id"], "actions": x["actions"]}]
 
         logs = self.loggers = {}
         for x in loggers:
-            if x['name'] in logs:
-                logs[x['name']]['formats'][x['format_name']] = x['response']
+            if x["name"] in logs:
+                logs[x["name"]]["formats"][x["format_name"]] = x["response"]
             else:
-                logs[x['name']] = {
-                    "formats": {x['format_name']: x['response']},
-                    "channel": self.guild.get_channel(x['channel']),
-                    "id": x['id']
+                logs[x["name"]] = {
+                    "formats": {x["format_name"]: x["response"]},
+                    "channel": self.guild.get_channel(x["channel"]),
+                    "id": x["id"],
                 }
 
         self._fetched = True
@@ -90,8 +92,8 @@ class ParsingContext:
         data = await conn.fetch(query, actions)
 
         for x in data:
-            self.actions[x['id']] = dict(x)
-            self.actions[x['id']]['args'] = ujson.loads(x['args'])
+            self.actions[x["id"]] = dict(x)
+            self.actions[x["id"]]["args"] = ujson.loads(x["args"])
 
     async def run_event(self, name: str, conn: asyncpg.Connection, stack: List[str] = None, vbls: PARSE_VARS = None):
         await self.fetch_required_data()
@@ -103,17 +105,16 @@ class ParsingContext:
         unlinked = []
 
         for dispatch in self.events[name]:
-            unlinked += [x for x in dispatch['actions'] if x not in self.actions]
+            unlinked += [x for x in dispatch["actions"] if x not in self.actions]
 
         if unlinked:
             await self.link(unlinked, conn)
 
-        stack.append(f"Event '{name}'") # at this point it's safe to assume that the dispatching can go ahead
+        stack.append(f"Event '{name}'")  # at this point it's safe to assume that the dispatching can go ahead
 
         for dispatch in self.events[name]:
-            for i, runner in enumerate(dispatch['actions']):
+            for i, runner in enumerate(dispatch["actions"]):
                 await self.run_action(self.actions[runner], conn, vbls, stack, i)
-
 
     async def run_logger(self, name: str, conn: asyncpg.Connection, stack: List[str], vbls: PARSE_VARS = None):
         await self.fetch_required_data()
@@ -124,19 +125,23 @@ class ParsingContext:
     async def run_automod(self, event: str, **vbls: PARSE_VARS):
         await self.fetch_required_data()
 
-    async def run_action(self, action: AnyAction, conn: asyncpg.Connection, vbls: Optional[PARSE_VARS], stack: List[str], n: int = None):
+    async def run_action(
+        self, action: AnyAction, conn: asyncpg.Connection, vbls: Optional[PARSE_VARS], stack: List[str], n: int = None
+    ):
         stack = stack.copy()
         stack.append(f"action #{n} (type: {ActionTypes.reversed[action['type']]})")
 
-        if action['type'] == ActionTypes.dispatch:
-            if await self.calculate_conditional(action['condition'], stack, vbls, conn):
-                await self.run_event(action['main_text'], conn, stack, vbls)
+        if action["type"] == ActionTypes.dispatch:
+            if await self.calculate_conditional(action["condition"], stack, vbls, conn):
+                await self.run_event(action["main_text"], conn, stack, vbls)
 
-        elif action['type'] == ActionTypes.log:
-            if await self.calculate_conditional(action['condition'], stack, vbls, conn):
-                await self.run_logger(action['main_text'], conn, stack, vbls)
+        elif action["type"] == ActionTypes.log:
+            if await self.calculate_conditional(action["condition"], stack, vbls, conn):
+                await self.run_logger(action["main_text"], conn, stack, vbls)
 
-    async def calculate_conditional(self, condition: Optional[str], stack: List[str], vbls: Optional[PARSE_VARS], conn: asyncpg.Connection) -> bool:
+    async def calculate_conditional(
+        self, condition: Optional[str], stack: List[str], vbls: Optional[PARSE_VARS], conn: asyncpg.Connection
+    ) -> bool:
         if not condition:
             return True
 
@@ -158,27 +163,38 @@ class ParsingContext:
     async def parse_input(self, parsable: str, stack: List[str]) -> List[BaseAst]:
         tokens = arg_lex.run_lex(parsable)
         output = []
-        depth: List[Union[CounterAccess, VariableAccess]] = [] # noqa
+        depth: List[Union[CounterAccess, VariableAccess]] = []  # noqa
         last = None
 
         it: Iterator[arg_lex.Token] = iter(tokens)
         for token in it:
             if token.name == "Error":
-                raise ExecutionInterrupt(f"| {parsable}\n| {' '*token.start}{'^'*(token.end-token.start)}\n| Unknown token", stack)
+                raise ExecutionInterrupt(
+                    f"| {parsable}\n| {' '*token.start}{'^'*(token.end-token.start)}\n| Unknown token", stack
+                )
 
             if token.name == "PIn":
                 if depth and last is depth[-1]:
-                    raise ExecutionInterrupt(f"| {parsable}\n| {' '*token.start}{'^'*(token.end-token.start)}\n| Doubled in-parentheses", stack)
+                    raise ExecutionInterrupt(
+                        f"| {parsable}\n| {' '*token.start}{'^'*(token.end-token.start)}\n| Doubled in-parentheses",
+                        stack,
+                    )
 
                 if not isinstance(last, (CounterAccess, VariableAccess)):
-                    raise ExecutionInterrupt(f"| {parsable}\n| {' '*token.start}{'^'*(token.end-token.start)}\n| Unexpected in-parentheses", stack)
+                    raise ExecutionInterrupt(
+                        f"| {parsable}\n| {' '*token.start}{'^'*(token.end-token.start)}\n| Unexpected in-parentheses",
+                        stack,
+                    )
 
                 depth.append(last)
                 continue
 
             elif token.name == "POut":
                 if not depth:
-                    raise ExecutionInterrupt(f"| {parsable}\n| {' '*token.start}{'^'*(token.end-token.start)}\n| Unexpected out-parentheses", stack)
+                    raise ExecutionInterrupt(
+                        f"| {parsable}\n| {' '*token.start}{'^'*(token.end-token.start)}\n| Unexpected out-parentheses",
+                        stack,
+                    )
 
                 depth.pop()
                 continue
@@ -210,18 +226,24 @@ class ParsingContext:
                 continue
 
         true_output = []
-        it: Iterator[Tuple[int, arg_lex.Token]] = iter(enumerate(output)) # noqa
+        it: Iterator[Tuple[int, arg_lex.Token]] = iter(enumerate(output))  # noqa
         for i, x in it:
             if isinstance(x, BiOpExpr):
                 if not true_output:
-                    raise ExecutionInterrupt(f"| {parsable}\n| {' '*(x.token.end-x.token.start)}{'^'*(x.token.end-x.token.start)}\n| Unexpected comparison here", stack)
+                    raise ExecutionInterrupt(
+                        f"| {parsable}\n| {' '*(x.token.end-x.token.start)}{'^'*(x.token.end-x.token.start)}\n| Unexpected comparison here",
+                        stack,
+                    )
 
                 x.left = true_output.pop()
                 try:
                     x.right = next(it)[1]
                 except StopIteration:
-                    raise ExecutionInterrupt(f"| {parsable}\n| {' '*(x.token.end-x.token.start)}{'^'*(x.token.end-x.token.start)}\n| "
-                                             "Unexpected comparison here (missing something to compare to)", stack)
+                    raise ExecutionInterrupt(
+                        f"| {parsable}\n| {' '*(x.token.end-x.token.start)}{'^'*(x.token.end-x.token.start)}\n| "
+                        "Unexpected comparison here (missing something to compare to)",
+                        stack,
+                    )
 
                 true_output.append(x)
                 continue
@@ -230,6 +252,7 @@ class ParsingContext:
                 true_output.append(x)
 
         return true_output
+
 
 class BaseAst:
     __slots__ = "value", "start", "token", "stack"
@@ -240,65 +263,85 @@ class BaseAst:
         self.value = t.value
         self.start = t.start
 
-    async def access(self, ctx: ParsingContext,  vbls: Optional[PARSE_VARS], conn: asyncpg.Connection) -> Any:
+    async def access(self, ctx: ParsingContext, vbls: Optional[PARSE_VARS], conn: asyncpg.Connection) -> Any:
         raise NotImplementedError
 
+
 class CounterAccess(BaseAst):
-    __slots__ = "args",
+    __slots__ = ("args",)
+
     def __init__(self, t: arg_lex.Token, stack: List[str]):
         super().__init__(t, stack)
         self.value = t.value.lstrip("%")
         self.args: List[BaseAst] = []
 
-    async def access(self, ctx: ParsingContext,  vbls: Optional[PARSE_VARS], conn: asyncpg.Connection) -> int:
+    async def access(self, ctx: ParsingContext, vbls: Optional[PARSE_VARS], conn: asyncpg.Connection) -> int:
         if self.value not in ctx.counters:
-            data = await conn.fetchrow("SELECT * FROM counters WHERE cfg_id = $1 AND name = $2", ctx._cfg_id, self.value)
+            data = await conn.fetchrow(
+                "SELECT * FROM counters WHERE cfg_id = $1 AND name = $2", ctx._cfg_id, self.value
+            )
             if not data:
                 raise ExecutionInterrupt(
                     f"| {{input}}\n| {' ' * self.token.start}{'^' * (self.token.end - self.token.start)}\n| "
-                    f"Failed late to find counter '{self.value}'", self.stack)
+                    f"Failed late to find counter '{self.value}'",
+                    self.stack,
+                )
 
             ctx.counters[self.value] = counter = ConfiguredCounter(
-                name=data['name'], per_user=data['per_user'],
-                initial_count=data['start'], decay_per=data['decay_per'],
-                decay_rate=data['decay_rate'], id=data['id']
+                name=data["name"],
+                per_user=data["per_user"],
+                initial_count=data["start"],
+                decay_per=data["decay_per"],
+                decay_rate=data["decay_rate"],
+                id=data["id"],
             )
         else:
             counter = ctx.counters[self.value]
 
-        if counter['per_user'] and not self.args:
+        if counter["per_user"] and not self.args:
             raise ExecutionInterrupt(
                 f"| {{input}}\n| {' ' * self.token.start}{'^' * (self.token.end - self.token.start)}\n| "
-                f"No argument passed to per-user counter", self.stack)
+                f"No argument passed to per-user counter",
+                self.stack,
+            )
 
-        elif counter['per_user']:
+        elif counter["per_user"]:
             d = await self.args[0].access(ctx, vbls, conn)
             if not isinstance(d, int):
                 raise ExecutionInterrupt(
                     f"| {{input}}\n| {' ' * self.args[0].token.start}{'^' * (self.args[0].token.end - self.args[0].token.start)}\n| "
-                    f"Expected a user id to access per-user counter, got {d.__class__.__name__}", self.stack)
+                    f"Expected a user id to access per-user counter, got {d.__class__.__name__}",
+                    self.stack,
+                )
 
             return await conn.fetchval(
                 "INSERT INTO counter_values VALUES ($1, $2, now() at time zone 'utc', $3) ON CONFLICT DO NOTHING RETURNING val",
-                counter['id'], counter['inital_count'] or 0, d
+                counter["id"],
+                counter["inital_count"] or 0,
+                d,
             )
 
         else:
             return await conn.fetchval(
                 "INSERT INTO counter_values VALUES ($1, $2, now() at time zone 'utc', null) ON CONFLICT DO NOTHING RETURNING val",
-                counter['id'], counter['inital_count'] or 0,
+                counter["id"],
+                counter["inital_count"] or 0,
             )
 
 
 class VariableAccess(BaseAst):
-    __slots__ = "args",
+    __slots__ = ("args",)
+
     def __init__(self, t: arg_lex.Token, stack: List[str]):
         super().__init__(t, stack)
         self.value = t.value.lstrip("$")
         self.args: List[BaseAst] = []
 
-    async def access(self, ctx: ParsingContext,  vbls: Optional[PARSE_VARS], conn: asyncpg.Connection) -> Union[int, str, bool]:
+    async def access(
+        self, ctx: ParsingContext, vbls: Optional[PARSE_VARS], conn: asyncpg.Connection
+    ) -> Union[int, str, bool]:
         raise NotImplementedError
+
 
 class BiOpExpr(BaseAst):
     __slots__ = "left", "right"
@@ -308,16 +351,22 @@ class BiOpExpr(BaseAst):
         self.left: Optional[BaseAst] = None
         self.right: Optional[BaseAst] = None
 
-    async def access(self, ctx: ParsingContext,  vbls: Optional[PARSE_VARS], conn: asyncpg.Connection) -> bool:
+    async def access(self, ctx: ParsingContext, vbls: Optional[PARSE_VARS], conn: asyncpg.Connection) -> bool:
         condl = await self.left.access(ctx, vbls, conn)
         condr = await self.right.access(ctx, vbls, conn)
         if type(condl) != type(condr):
-            raise ExecutionInterrupt(f"| {{input}}\n| {' '*self.token.start}{'^'*(self.token.end-self.token.start)}\n| "
-                                     f"Cannot compare {condl.__class__.__name__} to {condr.__class__.__name__}", self.stack)
+            raise ExecutionInterrupt(
+                f"| {{input}}\n| {' '*self.token.start}{'^'*(self.token.end-self.token.start)}\n| "
+                f"Cannot compare {condl.__class__.__name__} to {condr.__class__.__name__}",
+                self.stack,
+            )
 
         if type(condr) is not int and self.token.value in ("SEQ", "GEQ", "GQ", "SQ"):
-            raise ExecutionInterrupt(f"| {{input}}\n| {' '*self.token.start}{'^'*(self.token.end-self.token.start)}\n| "
-                                     f"Cannot apply operator '{self.token.value}' to {condr.__class__.__name__}", self.stack)
+            raise ExecutionInterrupt(
+                f"| {{input}}\n| {' '*self.token.start}{'^'*(self.token.end-self.token.start)}\n| "
+                f"Cannot apply operator '{self.token.value}' to {condr.__class__.__name__}",
+                self.stack,
+            )
 
         return getattr(self, self.token.value)(condl, condr)
 
