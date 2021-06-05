@@ -2,7 +2,10 @@ from discord import Enum
 from typing import TypedDict, Optional, List, Union, Dict
 
 __all__ = (
+    "AnyAction",
+    "ActionTypes",
     "CounterAction",
+    "ConfiguredCounter",
     "DispatchAction",
     "LogAction",
     "DoAction",
@@ -20,6 +23,27 @@ __all__ = (
     "GuildConfig",
 )
 
+class ActionTypes:
+    counter = 1
+    dispatch = 2
+    log = 3
+    do = 4
+    reversed = {
+        1: "counter",
+        2: "dispatch",
+        3: "log",
+        4: "do"
+    }
+
+class AnyAction(TypedDict):
+    id: int
+    type: int
+    main_text: str
+    condition: Optional[str]
+    modify: Optional[int]
+    target: Optional[str]
+    event: Optional[str]
+    args: Dict[str, Union[str, int, bool]]
 
 class CounterAction(TypedDict):
     counter: str
@@ -31,7 +55,6 @@ class CounterAction(TypedDict):
 class DispatchAction(TypedDict):
     dispatch: str
     condition: Optional[str]
-
 
 class LogAction(TypedDict):
     log: str
@@ -88,6 +111,8 @@ class ConfigCounter(TypedDict):
     decay_rate: Optional[int]
     decay_per: Optional[int]
 
+class ConfiguredCounter(ConfigCounter):
+    id: int
 
 class ConfigEvent(TypedDict):
     name: str
@@ -134,9 +159,18 @@ class Automod(TypedDict):
 class GuildConfig:
     def __init__(self, guild_id: int):
         self.guild_id = guild_id
+        self.id: Optional[int] = None
         self.selfroles: List[SelfRole] = []
         self.counters: List[ConfigCounter] = []
         self.events = []
         self.automod_events = []
         self.loggers = {}
         self.commands = {}
+
+class SparseGuildConfig:
+    def __init__(self, guild_id: int):
+        self.guild_id = guild_id
+        self.counters: List[str] = []
+        self.events: List[str] = []
+        self.loggers: List[str] = []
+        self.commands: List[str] = []

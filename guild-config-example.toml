@@ -33,8 +33,8 @@ name = "warn"
 actions = [
     { counter = "next-case-number", modify = 1 },
     { counter = "warnings", modify = 1, target = "$userid" },
-    { dispatch = "kick", if = "%warnings >= 5"},
-    { dispatch = "ban", if = "%warnings >= 10"}
+    { dispatch = "kick", if = "%warnings($userid) >= 5"},
+    { dispatch = "ban", if = "%warnings($userid) >= 10"}
 ]
 
 [[event]]
