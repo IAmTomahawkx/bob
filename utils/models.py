@@ -162,7 +162,7 @@ class GuildConfig:
         self.guild_id = guild_id
         self.id: Optional[int] = None
         self.selfroles: List[SelfRole] = []
-        self.counters: List[ConfigCounter] = []
+        self.counters: Dict[str, ConfigCounter] = {}
         self.events = []
         self.automod_events = []
         self.loggers = {}

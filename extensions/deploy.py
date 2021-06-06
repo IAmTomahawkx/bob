@@ -1,14 +1,24 @@
 import discord
+import itertools
+import ujson
 from discord.ext import commands
 from utils.bot import Bot
 from utils import extractor, context
+from utils.models import *
 
 
 def setup(bot: Bot):
     bot.add_cog(Config(bot))
 
 
-STEPS = ["Parsing configuration file", "Updating selfroles"]
+STEPS = [
+    "Parsing configuration file",
+    "Removing old configuration (keeping removed counters intact for 24 hours)",
+    "Linking static events",
+    "Linking static loggers",
+    "Linking static counters",
+    "Updating selfroles"
+]
 
 
 class Config(commands.Cog):
@@ -42,15 +52,137 @@ class Config(commands.Cog):
             async with conn.transaction():
                 step += 1
                 await update_msg()
+
+                new_id = await conn.fetchval("INSERT INTO configs (guild_id) VALUES ($1) RETURNING id", ctx.guild.id)
+                rows = await conn.fetch(
+                    "DELETE FROM events "
+                    "WHERE $1 = (SELECT guild_id FROM configs WHERE id = events.cfg_id) AND cfg_id != $2 "
+                    "RETURNING actions",
+                    ctx.guild.id, new_id
+                )
+                await conn.execute(
+                    "DELETE FROM loggers "
+                    "WHERE $1 = (SELECT guild_id FROM configs WHERE id = loggers.cfg_id) AND cfg_id != $2",
+                    ctx.guild.id, new_id
+                )
+
+                refed = list(cfg.counters.keys())
+                await conn.execute(
+                    "UPDATE counters "
+                    "SET deref_until = (NOW() AT TIME ZONE 'utc' + INTERVAL '24 hours') "
+                    "WHERE deref_until IS NULL AND $1 = (SELECT guild_id FROM configs WHERE id = counters.cfg_id) AND name != ANY($2)",
+                    ctx.guild.id, refed
+                )
+
+                await conn.execute("DELETE FROM actions WHERE id = ANY($1)", list(itertools.chain(x['actions'] for x in rows)))
+
+                step += 1
+                await update_msg()
+
+                _evens = []
+                for event in cfg.events:
+                    # is this hellish? absolutely. But it works. and honestly i don't see a way around this horrid for loop
+                    acts = []
+                    for act in event['actions']:
+                        acts.append(await conn.fetchval(
+                            "INSERT INTO actions (type, main_text, condition, modify, target, event, args) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id",
+                            *(
+                                ActionTypes.counter,
+                                act['counter'],
+                                act['condition'],
+                                act['modify'],
+                                act['target'],
+                                None, None
+                            ) if 'counter' in act else (
+                                (
+                                    ActionTypes.dispatch,
+                                    act['dispatch'],
+                                    act['condition'],
+                                    None, None, act.get("args") and ujson.dumps(act['args'])
+                                ) if "dispatch" in act else (
+                                    (
+                                        ActionTypes.do,
+                                        act['do'],
+                                        act['condition'],
+                                        None, None, None,
+                                        act.get("args") and ujson.dumps(act['args'])
+                                    ) if "do" in act else (
+                                        ActionTypes.log,
+                                        act['log'],
+                                        act['condition'],
+                                        None, None,
+                                        act['event'],
+                                        act.get("args") and ujson.dumps(act['args'])
+                                    )
+                                )
+                            )
+                        ))
+
+                    _evens.append(
+                        (
+                            new_id,
+                            event['name'],
+                            acts
+                        )
+                    )
+
+                await conn.executemany("INSERT INTO events (cfg_id, name, actions) VALUES ($1, $2, $3)", _evens)
+
+                step += 1
+                await update_msg()
+
+                _evens.clear()
+                for l in cfg.loggers:
+                    nid = await conn.fetchval("INSERT INTO loggers (cfg_id, name, channel) VALUES ($1, $2, $3) RETURNING id",
+                                       new_id, l['name'], l['channel'])
+                    if not isinstance(l['formats'], dict):
+                        l['formats'] = {"_": l['formats']}
+                    _evens += [
+                        (
+                            nid,
+                            x[0],
+                            x[1]
+                        )
+                        for x in l['formats'].items()
+                    ]
+
+                await conn.executemany(
+                    "INSERT INTO logger_formats VALUES ($1, $2, $3)",
+                    _evens
+                )
+
+                step += 1
+                await update_msg()
+
+                await conn.executemany(
+                    "INSERT INTO counters (cfg_id, start, per_user, name, decay_rate, decay_per) VALUES ($1, $2, $3, $4, $5, $6)",
+                    [
+                        (
+                            new_id,
+                            x['initial_count'],
+                            x['per_user'],
+                            x['name'],
+                            x['decay_rate'],
+                            x['decay_per']
+                        )
+                        for x in cfg.counters.values()
+                    ]
+                )
+
+                step += 1
+                await update_msg()
                 selfroles = self.bot.get_cog("Self Roles")
                 if not selfroles and cfg.selfroles:
                     await update_msg("Failed to update selfroles: Extension not found")
-                    return
+                    raise RuntimeError # break the transaction
 
-                try:
-                    await selfroles.config_hook(cfg, conn)
-                except extractor.ConfigLoadError as e:
-                    await update_msg(e.msg)
-                    return
+                if cfg.selfroles:
+                    try:
+                        await selfroles.config_hook(cfg, conn)
+                    except extractor.ConfigLoadError as e:
+                        await update_msg(e.msg)
+                        raise RuntimeError
+
+
 
                 await update_msg(success=True)

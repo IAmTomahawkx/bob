@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS counters
 (
     id SERIAL PRIMARY KEY,
     cfg_id INTEGER NOT NULL REFERENCES configs(id) ON DELETE CASCADE,
+    deref_until TIMESTAMP,
     start INTEGER,
     per_user BOOLEAN NOT NULL DEFAULT FALSE,
     name TEXT NOT NULL,
