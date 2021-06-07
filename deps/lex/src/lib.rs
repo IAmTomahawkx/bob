@@ -41,11 +41,14 @@ enum Tokenizer {
     #[token("<=")]
     SEQ,
 
-    #[token(">")]
+    #[token("<")]
     SQ,
 
-    #[token("<")]
+    #[token(">")]
     GQ,
+
+    #[regex(r"[0-9]+")]
+    Literal,
 
     #[error]
     #[regex(r"[ \t\n\f]+", logos::skip)]
@@ -79,6 +82,7 @@ impl Token {
             Tokenizer::SEQ => "SEQ",
             Tokenizer::SQ => "SQ",
             Tokenizer::GQ => "GQ",
+            Tokenizer::Literal => "Literal",
             Tokenizer::ERROR => "Error"
         }.to_string();
         let start = r.start as u32;

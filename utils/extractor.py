@@ -8,7 +8,7 @@ from discord.ext import commands
 from utils.context import Context
 from .models import *
 
-with open("assets/emoji.regex") as f:
+with open("assets/emoji.regex", encoding="utf8") as f:
     _emoji_re = f.read()
 
 EMOJI_RE = re.compile(_emoji_re)
@@ -52,6 +52,11 @@ async def parse_guild_config(cfg: str, ctx: Context) -> GuildConfig:
         parsed = toml.loads(cfg)
     except toml.TomlDecodeError as err:
         raise ConfigLoadError(f"The structure of the file is invalid: {err.msg}")
+
+    if "error-channel" not in parsed:
+        raise ConfigLoadError(f"Missing required 'error-channel' key")
+
+    config.error_channel = await resolve_channel(ctx, parsed['error-channel'], "error-channel")
 
     if "selfrole" in parsed:
         config.selfroles = await parse_guild_selfroles(ctx, parsed["selfrole"])
@@ -275,16 +280,19 @@ async def parse_guild_logging(ctx: Context, cfg: Union[Dict[str, Any], List[Dict
     return resp
 
 
-async def parse_guild_automod(ctx: Context, cfg: Union[Dict[str, Any], List[Dict[str, Any]]]) -> List[Automod]:
+async def parse_guild_automod(ctx: Context, cfg: Union[Dict[str, Any], List[Dict[str, Any]]]) -> Dict[str, Automod]:
     if isinstance(cfg, dict):
         cfg = [cfg]
 
-    resp = []
+    resp = {}
 
     for i, automod in enumerate(cfg):
         event = None
         try:
             event = str(automod["event"])
+            if event in resp:
+                raise ConfigLoadError(f"Automod trigger '{event}' is duplicated")
+
             context = f"automod '{event}' (#{i+1})"
             parsed_ignores = {"roles": [], "channels": []}
 
@@ -310,7 +318,7 @@ async def parse_guild_automod(ctx: Context, cfg: Union[Dict[str, Any], List[Dict
 
             actions = [await parse_action(x, context, n) for n, x in enumerate(automod["actions"])]
 
-            resp.append(Automod(event=event, ignore=ignores, actions=actions))
+            resp[event] = Automod(event=event, ignore=parsed_ignores, actions=actions)
 
         except KeyError as e:
             if event:

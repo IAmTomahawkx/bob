@@ -153,18 +153,19 @@ class AutomodIgnore(TypedDict):
 
 class Automod(TypedDict):
     event: str
-    ignore: Optional[AutomodIgnore]
+    ignore: AutomodIgnore
     actions: List[Actions]
 
 
 class GuildConfig:
     def __init__(self, guild_id: int):
         self.guild_id = guild_id
+        self.error_channel: Optional[int] = None
         self.id: Optional[int] = None
         self.selfroles: List[SelfRole] = []
         self.counters: Dict[str, ConfigCounter] = {}
         self.events = []
-        self.automod_events = []
+        self.automod_events: Dict[str, Automod] = {}
         self.loggers = {}
         self.commands = {}
 
@@ -172,6 +173,7 @@ class GuildConfig:
 class SparseGuildConfig:
     def __init__(self, guild_id: int):
         self.guild_id = guild_id
+        self.error_channel: Optional[int] = None
         self.counters: List[str] = []
         self.events: List[str] = []
         self.loggers: List[str] = []

@@ -5,7 +5,7 @@ import asyncpg
 import discord
 import ujson
 from .models import *
-from . import arg_lex
+from deps import arg_lex
 from .bot import Bot
 
 PARSE_VARS = Optional[Dict[str, Union[str, int, bool]]]
@@ -33,7 +33,7 @@ class ParsingContext:
         self.loggers = {}
         self.counters = {}  # lazy filled, don't assume the counter is in this
         self.commands = {}
-        self.automod = []
+        self.automod = {}
         self.actions = {}
         self._fetched = False
 
@@ -42,7 +42,7 @@ class ParsingContext:
             return
 
         async with self.bot.db.acquire() as conn:
-            query = "SELECT id FROM configs WHERE guild_id = $1 ORDER BY id LIMIT 1"
+            query = "SELECT id FROM configs WHERE guild_id = $1 ORDER BY id DESC LIMIT 1"
             cfg_id = self._cfg_id = await conn.fetchval(query, self.guild.id)
 
             query = """
@@ -58,8 +58,9 @@ class ParsingContext:
                 l.id, l.name, l.channel, format_name, response
             FROM logger_formats
             INNER JOIN loggers l on logger_formats.logger_id = l.id
-            WHERE cfg_id = $1
+            WHERE l.cfg_id = $1
             """
+            print(self._cfg_id)
             loggers = await conn.fetch(query, cfg_id)
 
         self.events = {}
@@ -93,7 +94,7 @@ class ParsingContext:
 
         for x in data:
             self.actions[x["id"]] = dict(x)
-            self.actions[x["id"]]["args"] = ujson.loads(x["args"])
+            self.actions[x["id"]]["args"] = x["args"]
 
     async def run_event(self, name: str, conn: asyncpg.Connection, stack: List[str] = None, vbls: PARSE_VARS = None):
         await self.fetch_required_data()
@@ -116,14 +117,108 @@ class ParsingContext:
             for i, runner in enumerate(dispatch["actions"]):
                 await self.run_action(self.actions[runner], conn, vbls, stack, i)
 
-    async def run_logger(self, name: str, conn: asyncpg.Connection, stack: List[str], vbls: PARSE_VARS = None):
+    async def run_automod(self, automod: dict, conn: asyncpg.Connection, stack: List[str] = None, vbls: PARSE_VARS = None):
         await self.fetch_required_data()
+        stack = stack or ["<dispatch>"]
+
+        unlinked = [x for x in automod["actions"] if x not in self.actions]
+
+        if unlinked:
+            await self.link(unlinked, conn)
+
+        stack.append(f"Automod trigger '{automod['event']}'")  # at this point it's safe to assume that the dispatching can go ahead
+
+        for i, runner in enumerate(automod["actions"]):
+            await self.run_action(self.actions[runner], conn, vbls, stack, i)
+
+    async def run_logger(self, name: str, event: str, conn: asyncpg.Connection, stack: List[str], vbls: PARSE_VARS = None):
+        await self.fetch_required_data()
+        print(self.loggers)
+        logger = self.loggers[name]
+        stack.append(f"Logger '{name}' @ event '{event}'")
+        if event in logger['formats']:
+            fmt = logger['formats'][event]
+        elif "_" in logger['formats']:
+            fmt = logger['formats']['_']
+        else:
+            raise ExecutionInterrupt(f"Failed late to catch unknown logger ({name}) event: '{event}'", stack)
+
+        channel = logger['channel']
+        if not channel:
+            raise ExecutionInterrupt(f"Channel does not exist for logger {name}", stack)
+
+        try:
+            await channel.send(await self.format_fmt(fmt, conn, vbls))
+        except discord.HTTPException as e:
+            raise ExecutionInterrupt(f"Failed to send message to logger '{name}': {e}", stack)
+
+        stack.pop()
 
     async def run_command(self, name: str, msg: discord.Message):
         await self.fetch_required_data()
 
-    async def run_automod(self, event: str, **vbls: PARSE_VARS):
-        await self.fetch_required_data()
+    async def format_fmt(self, fmt: str, conn: asyncpg.Connection, vbls: PARSE_VARS = None):
+        return fmt # TODO
+
+    async def alter_counter(self, counter: str, conn: asyncpg.Connection, stack: List[str], modify: int,
+                            target: Optional[str]=None, vbls: PARSE_VARS = None):
+        stack.append(f"Edit counter {counter}")
+        if target:
+            t = await self.parse_input(target, stack)
+            if not t:
+                raise ExecutionInterrupt(f"Got an empty target", stack)
+
+            elif not isinstance(t[0], VariableAccess):
+                token = t[0].token
+                raise ExecutionInterrupt(
+                    f"| {target}\n| {' ' * token.start}{'^' * (token.end - token.start)}\n| Unacceptable value", stack
+                )
+
+            else:
+                _target = await t[0].access(self, vbls, conn)
+                if not isinstance(_target, int):
+                    token = t[0].token
+                    raise ExecutionInterrupt(
+                        f"| {target}\n| {' ' * token.start}{'^' * (token.end - token.start)}\n| Expected a user id, got '{_target}'",
+                        stack
+                    )
+
+                target = _target
+
+        if counter in self.counters:
+            cnt = self.counters[counter]
+        else:
+            d = await conn.fetchrow("SELECT * FROM counters WHERE cfg_id = $1 AND name = $2", self._cfg_id, counter)
+            cnt = self.counters[counter] = ConfiguredCounter(
+                id=d['id'],
+                initial_count=d['start'],
+                decay_per=d['decay_per'],
+                decay_rate=d['decay_rate'],
+                name=counter,
+                per_user=d['per_user']
+            )
+            if not cnt['per_user']:
+                c = await conn.fetchval("SELECT val FROM counter_values WHERE counter_id = $1", cnt['id'])
+                if c is None:
+                    await conn.execute("INSERT INTO counter_values VALUES ($1, $2, (NOW() AT TIME ZONE 'utc'), null)",
+                                       cnt['id'], cnt['initial_count'])
+
+        if cnt['per_user']:
+            await conn.execute(
+                """
+                INSERT INTO counter_values VALUES (
+                $1,
+                ($2 + $3),
+                (NOW() AT TIME ZONE 'utc'),
+                $4
+                ) ON CONFLICT (user_id) DO UPDATE SET val = val + $3
+                """,
+                cnt['id'], cnt['start'], modify, target
+            )
+        else:
+            await conn.execute("UPDATE counter_values SET val = val + $1 WHERE counter_id = $2", modify, cnt['id'])
+
+        stack.pop()
 
     async def run_action(
         self, action: AnyAction, conn: asyncpg.Connection, vbls: Optional[PARSE_VARS], stack: List[str], n: int = None
@@ -137,7 +232,11 @@ class ParsingContext:
 
         elif action["type"] == ActionTypes.log:
             if await self.calculate_conditional(action["condition"], stack, vbls, conn):
-                await self.run_logger(action["main_text"], conn, stack, vbls)
+                await self.run_logger(action["main_text"], action['event'], conn, stack, vbls)
+
+        elif action['type'] == ActionTypes.counter:
+            if await self.calculate_conditional(action["condition"], stack, vbls, conn):
+                await self.alter_counter(action['main_text'], conn, stack, action['modify'], action['target'], vbls)
 
     async def calculate_conditional(
         self, condition: Optional[str], stack: List[str], vbls: Optional[PARSE_VARS], conn: asyncpg.Connection
@@ -225,6 +324,15 @@ class ParsingContext:
 
                 continue
 
+            elif token.name == "Literal":
+                last = Literal(token, stack)
+                if depth:
+                    depth[-1].args.append(last)
+                else:
+                    output.append(last)
+
+                continue
+
         true_output = []
         it: Iterator[Tuple[int, arg_lex.Token]] = iter(enumerate(output))  # noqa
         for i, x in it:
@@ -261,7 +369,6 @@ class BaseAst:
         self.stack = stack
         self.token = t
         self.value = t.value
-        self.start = t.start
 
     async def access(self, ctx: ParsingContext, vbls: Optional[PARSE_VARS], conn: asyncpg.Connection) -> Any:
         raise NotImplementedError
@@ -295,6 +402,16 @@ class CounterAccess(BaseAst):
                 decay_rate=data["decay_rate"],
                 id=data["id"],
             )
+
+            c = await conn.fetchval("SELECT val FROM counter_values WHERE counter_id = $1", counter['id'])
+            if c is None:
+                await conn.execute(
+                    "INSERT INTO counter_values VALUES ($1, $2, (NOW() AT TIME ZONE 'utc'), null)",
+                    counter['id'], counter['initial_count'])
+                return counter['initial_count']
+            else:
+                return c
+
         else:
             counter = ctx.counters[self.value]
 
@@ -315,17 +432,16 @@ class CounterAccess(BaseAst):
                 )
 
             return await conn.fetchval(
-                "INSERT INTO counter_values VALUES ($1, $2, now() at time zone 'utc', $3) ON CONFLICT DO NOTHING RETURNING val",
+                "",
                 counter["id"],
-                counter["inital_count"] or 0,
+                counter["initial_count"] or 0,
                 d,
             )
 
         else:
             return await conn.fetchval(
-                "INSERT INTO counter_values VALUES ($1, $2, now() at time zone 'utc', null) ON CONFLICT DO NOTHING RETURNING val",
-                counter["id"],
-                counter["inital_count"] or 0,
+                "SELECT val FROM counter_values WHERE counter_id = $1",
+                counter["id"]
             )
 
 
@@ -368,7 +484,7 @@ class BiOpExpr(BaseAst):
                 self.stack,
             )
 
-        return getattr(self, self.token.value)(condl, condr)
+        return getattr(self, self.token.name)(condl, condr)
 
     def EQ(self, l, r):
         return l == r
@@ -387,3 +503,14 @@ class BiOpExpr(BaseAst):
 
     def GQ(self, l, r):
         return l > r
+
+class Literal(BaseAst):
+    def __init__(self, t: arg_lex.Token, stack: List[str]):
+        super().__init__(t, stack)
+        try:
+            self.value = int(self.value)
+        except:
+            pass
+
+    async def access(self, ctx: ParsingContext, vbls: Optional[PARSE_VARS], conn: asyncpg.Connection) -> Any:
+        return self.value

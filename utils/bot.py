@@ -59,6 +59,8 @@ async def get_pre(bot, message):
 
 
 class Bot(commands.Bot):
+    loop: asyncio.AbstractEventLoop
+
     def __init__(self, **settings):
         self.settings = {}
         self.reload_settings()

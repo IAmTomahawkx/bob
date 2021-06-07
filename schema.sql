@@ -7,7 +7,9 @@ CREATE TABLE IF NOT EXISTS pages
 CREATE TABLE IF NOT EXISTS configs
 (
     id SERIAL PRIMARY KEY,
-    guild_id BIGINT NOT NULL
+    guild_id BIGINT NOT NULL,
+    store_messages BOOL NOT NULL,
+    error_channel BIGINT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS counters
 (
@@ -24,7 +26,7 @@ CREATE TABLE IF NOT EXISTS counter_values
 (
     counter_id INT NOT NULL REFERENCES counters(id),
     val INTEGER NOT NULL DEFAULT 0,
-    created_at TIMESTAMP NOT NULL,
+    last_decay TIMESTAMP NOT NULL,
     user_id BIGINT,
     UNIQUE (counter_id, user_id)
 );
@@ -67,6 +69,7 @@ CREATE TABLE IF NOT EXISTS command_arguments
 CREATE TABLE IF NOT EXISTS automod
 (
     id SERIAL PRIMARY KEY,
+    event TEXT NOT NULL,
     cfg_id INTEGER NOT NULL REFERENCES configs(id) ON DELETE CASCADE,
     actions INTEGER[] NOT NULL
 );
@@ -86,6 +89,16 @@ CREATE TABLE IF NOT EXISTS actions
     target TEXT,
     event TEXT,
     args JSONB
+);
+CREATE TABLE IF NOT EXISTS messages
+(
+    guild_id BIGINT NOT NULL,
+    message_id BIGINT NOT NULL,
+    PRIMARY KEY (guild_id, message_id),
+    author_id BIGINT NOT NULL,
+    channel_id BIGINT NOT NULL,
+    content TEXT NOT NULL,
+    image_urls TEXT[]
 );
 CREATE TABLE IF NOT EXISTS prefixes
 (
