@@ -117,7 +117,9 @@ class ParsingContext:
             for i, runner in enumerate(dispatch["actions"]):
                 await self.run_action(self.actions[runner], conn, vbls, stack, i)
 
-    async def run_automod(self, automod: dict, conn: asyncpg.Connection, stack: List[str] = None, vbls: PARSE_VARS = None):
+    async def run_automod(
+        self, automod: dict, conn: asyncpg.Connection, stack: List[str] = None, vbls: PARSE_VARS = None
+    ):
         await self.fetch_required_data()
         stack = stack or ["<dispatch>"]
 
@@ -126,24 +128,28 @@ class ParsingContext:
         if unlinked:
             await self.link(unlinked, conn)
 
-        stack.append(f"Automod trigger '{automod['event']}'")  # at this point it's safe to assume that the dispatching can go ahead
+        stack.append(
+            f"Automod trigger '{automod['event']}'"
+        )  # at this point it's safe to assume that the dispatching can go ahead
 
         for i, runner in enumerate(automod["actions"]):
             await self.run_action(self.actions[runner], conn, vbls, stack, i)
 
-    async def run_logger(self, name: str, event: str, conn: asyncpg.Connection, stack: List[str], vbls: PARSE_VARS = None):
+    async def run_logger(
+        self, name: str, event: str, conn: asyncpg.Connection, stack: List[str], vbls: PARSE_VARS = None
+    ):
         await self.fetch_required_data()
         print(self.loggers)
         logger = self.loggers[name]
         stack.append(f"Logger '{name}' @ event '{event}'")
-        if event in logger['formats']:
-            fmt = logger['formats'][event]
-        elif "_" in logger['formats']:
-            fmt = logger['formats']['_']
+        if event in logger["formats"]:
+            fmt = logger["formats"][event]
+        elif "_" in logger["formats"]:
+            fmt = logger["formats"]["_"]
         else:
             raise ExecutionInterrupt(f"Failed late to catch unknown logger ({name}) event: '{event}'", stack)
 
-        channel = logger['channel']
+        channel = logger["channel"]
         if not channel:
             raise ExecutionInterrupt(f"Channel does not exist for logger {name}", stack)
 
@@ -158,10 +164,17 @@ class ParsingContext:
         await self.fetch_required_data()
 
     async def format_fmt(self, fmt: str, conn: asyncpg.Connection, vbls: PARSE_VARS = None):
-        return fmt # TODO
+        return fmt  # TODO
 
-    async def alter_counter(self, counter: str, conn: asyncpg.Connection, stack: List[str], modify: int,
-                            target: Optional[str]=None, vbls: PARSE_VARS = None):
+    async def alter_counter(
+        self,
+        counter: str,
+        conn: asyncpg.Connection,
+        stack: List[str],
+        modify: int,
+        target: Optional[str] = None,
+        vbls: PARSE_VARS = None,
+    ):
         stack.append(f"Edit counter {counter}")
         if target:
             t = await self.parse_input(target, stack)
@@ -180,7 +193,7 @@ class ParsingContext:
                     token = t[0].token
                     raise ExecutionInterrupt(
                         f"| {target}\n| {' ' * token.start}{'^' * (token.end - token.start)}\n| Expected a user id, got '{_target}'",
-                        stack
+                        stack,
                     )
 
                 target = _target
@@ -190,20 +203,23 @@ class ParsingContext:
         else:
             d = await conn.fetchrow("SELECT * FROM counters WHERE cfg_id = $1 AND name = $2", self._cfg_id, counter)
             cnt = self.counters[counter] = ConfiguredCounter(
-                id=d['id'],
-                initial_count=d['start'],
-                decay_per=d['decay_per'],
-                decay_rate=d['decay_rate'],
+                id=d["id"],
+                initial_count=d["start"],
+                decay_per=d["decay_per"],
+                decay_rate=d["decay_rate"],
                 name=counter,
-                per_user=d['per_user']
+                per_user=d["per_user"],
             )
-            if not cnt['per_user']:
-                c = await conn.fetchval("SELECT val FROM counter_values WHERE counter_id = $1", cnt['id'])
+            if not cnt["per_user"]:
+                c = await conn.fetchval("SELECT val FROM counter_values WHERE counter_id = $1", cnt["id"])
                 if c is None:
-                    await conn.execute("INSERT INTO counter_values VALUES ($1, $2, (NOW() AT TIME ZONE 'utc'), null)",
-                                       cnt['id'], cnt['initial_count'])
+                    await conn.execute(
+                        "INSERT INTO counter_values VALUES ($1, $2, (NOW() AT TIME ZONE 'utc'), null)",
+                        cnt["id"],
+                        cnt["initial_count"],
+                    )
 
-        if cnt['per_user']:
+        if cnt["per_user"]:
             await conn.execute(
                 """
                 INSERT INTO counter_values VALUES (
@@ -213,10 +229,13 @@ class ParsingContext:
                 $4
                 ) ON CONFLICT (user_id) DO UPDATE SET val = val + $3
                 """,
-                cnt['id'], cnt['start'], modify, target
+                cnt["id"],
+                cnt["start"],
+                modify,
+                target,
             )
         else:
-            await conn.execute("UPDATE counter_values SET val = val + $1 WHERE counter_id = $2", modify, cnt['id'])
+            await conn.execute("UPDATE counter_values SET val = val + $1 WHERE counter_id = $2", modify, cnt["id"])
 
         stack.pop()
 
@@ -232,11 +251,11 @@ class ParsingContext:
 
         elif action["type"] == ActionTypes.log:
             if await self.calculate_conditional(action["condition"], stack, vbls, conn):
-                await self.run_logger(action["main_text"], action['event'], conn, stack, vbls)
+                await self.run_logger(action["main_text"], action["event"], conn, stack, vbls)
 
-        elif action['type'] == ActionTypes.counter:
+        elif action["type"] == ActionTypes.counter:
             if await self.calculate_conditional(action["condition"], stack, vbls, conn):
-                await self.alter_counter(action['main_text'], conn, stack, action['modify'], action['target'], vbls)
+                await self.alter_counter(action["main_text"], conn, stack, action["modify"], action["target"], vbls)
 
     async def calculate_conditional(
         self, condition: Optional[str], stack: List[str], vbls: Optional[PARSE_VARS], conn: asyncpg.Connection
@@ -403,12 +422,14 @@ class CounterAccess(BaseAst):
                 id=data["id"],
             )
 
-            c = await conn.fetchval("SELECT val FROM counter_values WHERE counter_id = $1", counter['id'])
+            c = await conn.fetchval("SELECT val FROM counter_values WHERE counter_id = $1", counter["id"])
             if c is None:
                 await conn.execute(
                     "INSERT INTO counter_values VALUES ($1, $2, (NOW() AT TIME ZONE 'utc'), null)",
-                    counter['id'], counter['initial_count'])
-                return counter['initial_count']
+                    counter["id"],
+                    counter["initial_count"],
+                )
+                return counter["initial_count"]
             else:
                 return c
 
@@ -439,10 +460,7 @@ class CounterAccess(BaseAst):
             )
 
         else:
-            return await conn.fetchval(
-                "SELECT val FROM counter_values WHERE counter_id = $1",
-                counter["id"]
-            )
+            return await conn.fetchval("SELECT val FROM counter_values WHERE counter_id = $1", counter["id"])
 
 
 class VariableAccess(BaseAst):
@@ -503,6 +521,7 @@ class BiOpExpr(BaseAst):
 
     def GQ(self, l, r):
         return l > r
+
 
 class Literal(BaseAst):
     def __init__(self, t: arg_lex.Token, stack: List[str]):

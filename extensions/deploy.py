@@ -26,7 +26,9 @@ class Config(commands.Cog):
     def __init__(self, bot: Bot):
         self.bot = bot
 
-    async def insert_actions(self, conn: asyncpg.Connection, cfg_id: int, data: list, event=False, automod=False) -> list:
+    async def insert_actions(
+        self, conn: asyncpg.Connection, cfg_id: int, data: list, event=False, automod=False
+    ) -> list:
         _evens = []
         for _event in data:
             # is this hellish? absolutely. But it works. and honestly i don't see a way around this horrid for loop
@@ -81,9 +83,9 @@ class Config(commands.Cog):
                 )
 
             if event:
-                _evens.append((cfg_id, _event['name'], acts))
+                _evens.append((cfg_id, _event["name"], acts))
             elif automod:
-                _evens.append((cfg_id, _event['event'], acts, _event['ignore']['roles'], _event['ignore']['channels']))
+                _evens.append((cfg_id, _event["event"], acts, _event["ignore"]["roles"], _event["ignore"]["channels"]))
 
         return _evens
 
@@ -117,7 +119,9 @@ class Config(commands.Cog):
 
                 new_id = await conn.fetchval(
                     "INSERT INTO configs (guild_id, store_messages, error_channel) VALUES ($1, $2, $3) RETURNING id",
-                    ctx.guild.id, any(x in cfg.automod_events for x in ("message_delete", "message_edit")), cfg.error_channel
+                    ctx.guild.id,
+                    any(x in cfg.automod_events for x in ("message_delete", "message_edit")),
+                    cfg.error_channel,
                 )
                 rows = await conn.fetch(
                     "DELETE FROM events "
@@ -189,7 +193,7 @@ class Config(commands.Cog):
                     WITH ins AS (INSERT INTO automod (cfg_id, event, actions) VALUES ($1, $2, $3) RETURNING id)
                     INSERT INTO automod_ignore VALUES ((select id FROM ins), $4, $5)
                     """,
-                    _evens
+                    _evens,
                 )
 
                 step += 1

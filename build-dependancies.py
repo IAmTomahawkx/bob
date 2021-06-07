@@ -5,9 +5,7 @@ import pathlib
 
 release = "--release" in sys.argv
 
-deps = {
-    "lex": "arg_lex"
-}
+deps = {"lex": "arg_lex"}
 
 args = ["cargo", "build"]
 if release:
@@ -16,7 +14,7 @@ if release:
 for dep, lib in deps.items():
     print(f"============================\nStarting build of {dep}\n============================")
     p = pathlib.Path("deps", dep)
-    #if "target" in os.listdir(p):
+    # if "target" in os.listdir(p):
     #    os.rmdir(pathlib.Path(p, "target"))
 
     subprocess.run(args, stdout=sys.stdout, stderr=sys.stderr, cwd=p.absolute())

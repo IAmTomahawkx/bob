@@ -56,7 +56,7 @@ async def parse_guild_config(cfg: str, ctx: Context) -> GuildConfig:
     if "error-channel" not in parsed:
         raise ConfigLoadError(f"Missing required 'error-channel' key")
 
-    config.error_channel = await resolve_channel(ctx, parsed['error-channel'], "error-channel")
+    config.error_channel = await resolve_channel(ctx, parsed["error-channel"], "error-channel")
 
     if "selfrole" in parsed:
         config.selfroles = await parse_guild_selfroles(ctx, parsed["selfrole"])

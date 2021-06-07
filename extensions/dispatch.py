@@ -8,8 +8,10 @@ from discord.ext import commands
 from utils.bot import Bot
 from utils import parse
 
+
 def setup(bot: Bot):
     bot.add_cog(Dispatch(bot))
+
 
 class Dispatch(commands.Cog):
     def __init__(self, bot: Bot):
@@ -30,14 +32,17 @@ class Dispatch(commands.Cog):
             INNER JOIN configs c on c.id = events.cfg_id
             """
         )
-        self.cached_triggers['configs'] = {
-            x['guild_id']: {"id": x['cfg_id'], "store_messages": x['store_messages'], "error_channel": x['error_channel']}
+        self.cached_triggers["configs"] = {
+            x["guild_id"]: {
+                "id": x["cfg_id"],
+                "store_messages": x["store_messages"],
+                "error_channel": x["error_channel"],
+            }
             for x in data
         }
-        guilds = itertools.groupby(data, lambda k: k['guild_id'])
-        self.cached_triggers['events'] = {
-            x[0]: {c['name']: {"name": c['name'], "actions": c['actions']} for c in x[1]}
-            for x in guilds
+        guilds = itertools.groupby(data, lambda k: k["guild_id"])
+        self.cached_triggers["events"] = {
+            x[0]: {c["name"]: {"name": c["name"], "actions": c["actions"]} for c in x[1]} for x in guilds
         }
 
         data = await self.bot.db.fetch(
@@ -49,23 +54,21 @@ class Dispatch(commands.Cog):
             INNER JOIN configs c on automod.cfg_id = c.id
             """
         )
-        guilds = itertools.groupby(data, lambda k: k['guild_id'])
-        self.cached_triggers['automod'] = {
-            c[0]: {
-                x['event']: dict(x) for x in c[1]
-            } for c in guilds
-        }
+        guilds = itertools.groupby(data, lambda k: k["guild_id"])
+        self.cached_triggers["automod"] = {c[0]: {x["event"]: dict(x) for x in c[1]} for c in guilds}
 
         self.filled.set()
 
-    async def fire_event_dispatch(self, event: dict, guild: discord.Guild, kwargs: Dict[str, Union[str, int, bool]], conn: asyncpg.Connection):
+    async def fire_event_dispatch(
+        self, event: dict, guild: discord.Guild, kwargs: Dict[str, Union[str, int, bool]], conn: asyncpg.Connection
+    ):
         ctx = parse.ParsingContext(self.bot, guild, None)
         print(event)
         try:
             await ctx.run_automod(event, conn, None, kwargs)
         except parse.ExecutionInterrupt as e:
-            g = guild.get_channel(self.cached_triggers['configs'][guild.id]['error_channel'])
-            if g: # drop it silently if it got deleted
+            g = guild.get_channel(self.cached_triggers["configs"][guild.id]["error_channel"])
+            if g:  # drop it silently if it got deleted
                 try:
                     await g.send(str(e))
                 except discord.HTTPException:
@@ -73,11 +76,11 @@ class Dispatch(commands.Cog):
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
-        if message.author.bot or not message.guild or message.guild.id not in self.cached_triggers['automod']:
+        if message.author.bot or not message.guild or message.guild.id not in self.cached_triggers["automod"]:
             return
 
         await self.filled.wait()
-        if "message" in self.cached_triggers['automod'][message.guild.id]:
+        if "message" in self.cached_triggers["automod"][message.guild.id]:
             even = {
                 "content": message.content,
                 "authorid": message.author.id,
@@ -85,261 +88,305 @@ class Dispatch(commands.Cog):
                 "authornick": message.author.nick,
                 "channelid": message.channel.id,
                 "channelname": message.channel.name,
-                "messageid": message.id
+                "messageid": message.id,
             }
             async with self.bot.db.acquire() as conn:
                 await conn.execute(
                     "INSERT INTO messages VALUES ($1, $2, $3, $4, $5, $6)",
-                    message.guild.id, message.id, message.author.id, message.channel.id, message.content,
-                    [x.proxy_url for x in message.attachments]
+                    message.guild.id,
+                    message.id,
+                    message.author.id,
+                    message.channel.id,
+                    message.content,
+                    [x.proxy_url for x in message.attachments],
                 )
-                await self.fire_event_dispatch(self.cached_triggers['automod'][message.guild.id]['message'], message.guild, even, conn=conn) # noqa
+                await self.fire_event_dispatch(
+                    self.cached_triggers["automod"][message.guild.id]["message"], message.guild, even, conn=conn
+                )  # noqa
 
     @commands.Cog.listener()
     async def on_raw_message_delete(self, payload: discord.RawMessageDeleteEvent):
         if not payload.guild_id:
             return
-        if payload.guild_id not in self.cached_triggers['automod']:
+        if payload.guild_id not in self.cached_triggers["automod"]:
             return
 
         await self.filled.wait()
-        if "message_delete" in self.cached_triggers['automod'][payload.guild_id]:
+        if "message_delete" in self.cached_triggers["automod"][payload.guild_id]:
             async with self.bot.db.acquire() as conn:
                 data = await conn.fetchrow(
                     "DELETE FROM messages WHERE guild_id = $1 AND message_id = $2 RETURNING *",
-                    payload.guild_id, payload.message_id
+                    payload.guild_id,
+                    payload.message_id,
                 )
                 guild = self.bot.get_guild(payload.guild_id)
-                author = guild.get_member(data['author_id'])
-                channel = guild.get_channel(data['channel_id'])
+                author = guild.get_member(data["author_id"])
+                channel = guild.get_channel(data["channel_id"])
                 even = {
-                    "content": data['content'],
-                    "authorid": data['author_id'],
+                    "content": data["content"],
+                    "authorid": data["author_id"],
                     "authorname": author and str(author),
                     "authornick": author and author.nick,
-                    "channelid": data['channel_id'],
+                    "channelid": data["channel_id"],
                     "channelname": channel and channel.name,
-                    "messageid": data['message_id']
+                    "messageid": data["message_id"],
                 }
-                await self.fire_event_dispatch(self.cached_triggers['automod'][payload.guild_id]['message_delete'], self.bot.get_guild(payload.guild_id), even, conn=conn)
+                await self.fire_event_dispatch(
+                    self.cached_triggers["automod"][payload.guild_id]["message_delete"],
+                    self.bot.get_guild(payload.guild_id),
+                    even,
+                    conn=conn,
+                )
 
     @commands.Cog.listener()
     async def on_raw_bulk_message_delete(self, payload: discord.RawBulkMessageDeleteEvent):
         if not payload.guild_id:
             return
-        if payload.guild_id not in self.cached_triggers['automod']:
+        if payload.guild_id not in self.cached_triggers["automod"]:
             return
 
         await self.filled.wait()
-        if "message_edit" in self.cached_triggers['automod'][payload.guild_id]:
+        if "message_edit" in self.cached_triggers["automod"][payload.guild_id]:
             async with self.bot.db.acquire() as conn:
-                data = await conn.fetch("DELETE FROM messages WHERE guild_id = $1 AND message_id = ANY($2) RETURNING *",
-                                        payload.guild_id, payload.message_ids)
+                data = await conn.fetch(
+                    "DELETE FROM messages WHERE guild_id = $1 AND message_id = ANY($2) RETURNING *",
+                    payload.guild_id,
+                    payload.message_ids,
+                )
                 for x in data:
                     guild = self.bot.get_guild(payload.guild_id)
-                    author = guild.get_member(x['author_id'])
-                    channel = guild.get_channel(x['channel_id'])
+                    author = guild.get_member(x["author_id"])
+                    channel = guild.get_channel(x["channel_id"])
                     even = {
-                        "content": x['content'],
-                        "authorid": x['author_id'],
+                        "content": x["content"],
+                        "authorid": x["author_id"],
                         "authorname": author and str(author),
                         "authornick": author and author.nick,
-                        "channelid": x['channel_id'],
+                        "channelid": x["channel_id"],
                         "channelname": channel and channel.name,
-                        "messageid": x['message_id']
+                        "messageid": x["message_id"],
                     }
-                    await self.fire_event_dispatch(self.cached_triggers['automod'][payload.guild_id]['message_delete'],
-                                                   guild, even, conn=conn)
+                    await self.fire_event_dispatch(
+                        self.cached_triggers["automod"][payload.guild_id]["message_delete"], guild, even, conn=conn
+                    )
 
     @commands.Cog.listener()
     async def on_raw_message_edit(self, payload: discord.RawMessageUpdateEvent):
         if not payload.guild_id:
             return
-        if payload.guild_id not in self.cached_triggers['automod']:
+        if payload.guild_id not in self.cached_triggers["automod"]:
             return
 
         await self.filled.wait()
-        if payload.cached_message and [discord.Embed.from_dict(x) for x in payload.data['embeds']] != payload.cached_message.embeds:
+        if (
+            payload.cached_message
+            and [discord.Embed.from_dict(x) for x in payload.data["embeds"]] != payload.cached_message.embeds
+        ):
             return
 
-        if "message_edit" in self.cached_triggers['automod'][payload.guild_id]:
+        if "message_edit" in self.cached_triggers["automod"][payload.guild_id]:
             async with self.bot.db.acquire() as conn:
-                data = await conn.fetchrow("SELECT * FROM messages WHERE guild_id = $1 AND message_id = $2", payload.guild_id, payload.message_id)
+                data = await conn.fetchrow(
+                    "SELECT * FROM messages WHERE guild_id = $1 AND message_id = $2",
+                    payload.guild_id,
+                    payload.message_id,
+                )
                 if not data:
                     return
 
                 await conn.execute(
                     "UPDATE messages SET content = $1 WHERE guild_id = $1 AND message_id = $2",
-                    payload.data['content'], payload.guild_id, payload.message_id
+                    payload.data["content"],
+                    payload.guild_id,
+                    payload.message_id,
                 )
 
                 guild = self.bot.get_guild(payload.guild_id)
-                author = guild.get_member(data['author_id'])
-                channel = guild.get_channel(data['channel_id'])
+                author = guild.get_member(data["author_id"])
+                channel = guild.get_channel(data["channel_id"])
                 even = {
-                    "content": payload.data['content'],
-                    "prev-content": data['content'],
-                    "authorid": data['author_id'],
+                    "content": payload.data["content"],
+                    "prev-content": data["content"],
+                    "authorid": data["author_id"],
                     "authorname": str(author),
                     "authornick": author.nick,
-                    "channelid": data['channel_id'],
+                    "channelid": data["channel_id"],
                     "channelname": channel.name,
-                    "messageid": data['message_id']
+                    "messageid": data["message_id"],
                 }
-                await self.fire_event_dispatch(self.cached_triggers['automod'][payload.guild_id]['message_edit'], guild, even, conn=conn)
+                await self.fire_event_dispatch(
+                    self.cached_triggers["automod"][payload.guild_id]["message_edit"], guild, even, conn=conn
+                )
 
     @commands.Cog.listener()
     async def on_raw_reaction_add(self, payload: discord.RawReactionActionEvent):
         if not payload.guild_id:
             return
-        if payload.guild_id not in self.cached_triggers['automod']:
+        if payload.guild_id not in self.cached_triggers["automod"]:
             return
 
         await self.filled.wait()
 
-        if "reaction_add" in self.cached_triggers['automod'][payload.guild_id]:
+        if "reaction_add" in self.cached_triggers["automod"][payload.guild_id]:
             even = {
                 "messageid": payload.message_id,
                 "channelid": payload.channel_id,
                 "userid": payload.user_id,
-                "reaction": payload.emoji.name
+                "reaction": payload.emoji.name,
             }
             async with self.bot.db.acquire() as conn:
-                await self.fire_event_dispatch(self.cached_triggers['automod'][payload.guild_id]['reaction_add'],
-                                               self.bot.get_guild(payload.guild_id), even, conn=conn)
+                await self.fire_event_dispatch(
+                    self.cached_triggers["automod"][payload.guild_id]["reaction_add"],
+                    self.bot.get_guild(payload.guild_id),
+                    even,
+                    conn=conn,
+                )
 
     @commands.Cog.listener()
     async def on_raw_reaction_remove(self, payload: discord.RawReactionActionEvent):
         if not payload.guild_id:
             return
-        if payload.guild_id not in self.cached_triggers['automod']:
+        if payload.guild_id not in self.cached_triggers["automod"]:
             return
 
         await self.filled.wait()
 
-        if "reaction_remove" in self.cached_triggers['automod'][payload.guild_id]:
+        if "reaction_remove" in self.cached_triggers["automod"][payload.guild_id]:
             even = {
                 "messageid": payload.message_id,
                 "channelid": payload.channel_id,
                 "userid": payload.user_id,
-                "reaction": payload.emoji.name
+                "reaction": payload.emoji.name,
             }
             async with self.bot.db.acquire() as conn:
-                await self.fire_event_dispatch(self.cached_triggers['automod'][payload.guild_id]['reaction_remove'],
-                                               self.bot.get_guild(payload.guild_id), even, conn=conn)
-
+                await self.fire_event_dispatch(
+                    self.cached_triggers["automod"][payload.guild_id]["reaction_remove"],
+                    self.bot.get_guild(payload.guild_id),
+                    even,
+                    conn=conn,
+                )
 
     @commands.Cog.listener()
     async def on_raw_reaction_clear(self, payload: discord.RawReactionClearEvent):
         if not payload.guild_id:
             return
-        if payload.guild_id not in self.cached_triggers['automod']:
+        if payload.guild_id not in self.cached_triggers["automod"]:
             return
 
         await self.filled.wait()
 
-        if "reaction_all_remove" in self.cached_triggers['automod'][payload.guild_id]:
-            even = {
-                "messageid": payload.message_id,
-                "channelid": payload.channel_id,
-                "reaction": None
-            }
+        if "reaction_all_remove" in self.cached_triggers["automod"][payload.guild_id]:
+            even = {"messageid": payload.message_id, "channelid": payload.channel_id, "reaction": None}
             async with self.bot.db.acquire() as conn:
-                await self.fire_event_dispatch(self.cached_triggers['automod'][payload.guild_id]['reaction_all_remove'],
-                                               self.bot.get_guild(payload.guild_id), even, conn=conn)
-
+                await self.fire_event_dispatch(
+                    self.cached_triggers["automod"][payload.guild_id]["reaction_all_remove"],
+                    self.bot.get_guild(payload.guild_id),
+                    even,
+                    conn=conn,
+                )
 
     @commands.Cog.listener()
     async def on_raw_reaction_emoji_clear(self, payload: discord.RawReactionClearEmojiEvent):
         if not payload.guild_id:
             return
-        if payload.guild_id not in self.cached_triggers['automod']:
+        if payload.guild_id not in self.cached_triggers["automod"]:
             return
 
         await self.filled.wait()
 
-        if "reaction_all_remove" in self.cached_triggers['automod'][payload.guild_id]:
-            even = {
-                "messageid": payload.message_id,
-                "channelid": payload.channel_id,
-                "reaction": payload.emoji.name
-            }
+        if "reaction_all_remove" in self.cached_triggers["automod"][payload.guild_id]:
+            even = {"messageid": payload.message_id, "channelid": payload.channel_id, "reaction": payload.emoji.name}
             async with self.bot.db.acquire() as conn:
-                await self.fire_event_dispatch(self.cached_triggers['automod'][payload.guild_id]['reaction_all_remove'],
-                                               self.bot.get_guild(payload.guild_id), even, conn=conn)
+                await self.fire_event_dispatch(
+                    self.cached_triggers["automod"][payload.guild_id]["reaction_all_remove"],
+                    self.bot.get_guild(payload.guild_id),
+                    even,
+                    conn=conn,
+                )
 
     @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member):
         await self.filled.wait()
-        if member.guild.id not in self.cached_triggers['automod']:
+        if member.guild.id not in self.cached_triggers["automod"]:
             return
 
-        if "user_join" in self.cached_triggers['automod'][member.guild.id]:
+        if "user_join" in self.cached_triggers["automod"][member.guild.id]:
             even = {
                 "userid": member.id,
                 "username": str(member),
                 "userisbot": member.bot,
-                "useravatar": member.avatar.with_format("gif").url if member.avatar.is_animated() else member.avatar.with_format("png").url,
+                "useravatar": member.avatar.with_format("gif").url
+                if member.avatar.is_animated()
+                else member.avatar.with_format("png").url,
                 "usergatepending": member.pending,
                 "userstatus": member.status.name,
                 "usercreatedat": member.created_at,
-                "usernick": member.nick
+                "usernick": member.nick,
             }
             async with self.bot.db.acquire() as conn:
-                await self.fire_event_dispatch(self.cached_triggers['automod'][member.guild.id]['user_join'], member.guild, even,
-                                               conn=conn)
+                await self.fire_event_dispatch(
+                    self.cached_triggers["automod"][member.guild.id]["user_join"], member.guild, even, conn=conn
+                )
 
     @commands.Cog.listener()
     async def on_member_leave(self, member: discord.Member):
         await self.filled.wait()
-        if member.guild.id not in self.cached_triggers['automod']:
+        if member.guild.id not in self.cached_triggers["automod"]:
             return
 
-        if "user_leave" in self.cached_triggers['automod'][member.guild.id]:
+        if "user_leave" in self.cached_triggers["automod"][member.guild.id]:
             even = {
                 "userid": member.id,
                 "username": str(member),
                 "userisbot": member.bot,
-                "useravatar": member.avatar.with_format("gif").url if member.avatar.is_animated() else member.avatar.with_format("png").url,
+                "useravatar": member.avatar.with_format("gif").url
+                if member.avatar.is_animated()
+                else member.avatar.with_format("png").url,
                 "usergatepending": member.pending,
                 "usercreatedat": member.created_at,
-                "usernick": member.nick
+                "usernick": member.nick,
             }
             async with self.bot.db.acquire() as conn:
-                await self.fire_event_dispatch(self.cached_triggers['automod'][member.guild.id]['user_leave'], member.guild, even,
-                                               conn=conn)
+                await self.fire_event_dispatch(
+                    self.cached_triggers["automod"][member.guild.id]["user_leave"], member.guild, even, conn=conn
+                )
 
     @commands.Cog.listener()
     async def on_member_update(self, before: discord.Member, after: discord.Member):
         await self.filled.wait()
-        if before.guild.id not in self.cached_triggers['automod']:
+        if before.guild.id not in self.cached_triggers["automod"]:
             return
 
-        if "user_update" in self.cached_triggers['automod'][before.guild.id]:
+        if "user_update" in self.cached_triggers["automod"][before.guild.id]:
             even = {
                 "userid": before.id,
                 "usercreatedat": before.created_at,
                 "userisbot": before.bot,
                 "busername": str(before),
                 "ausername": str(after),
-                "buseravatar": before.avatar.with_format("gif").url if before.avatar.is_animated() else before.avatar.with_format("png").url,
-                "auseravatar": after.avatar.with_format("gif").url if after.avatar.is_animated() else after.avatar.with_format("png").url,
+                "buseravatar": before.avatar.with_format("gif").url
+                if before.avatar.is_animated()
+                else before.avatar.with_format("png").url,
+                "auseravatar": after.avatar.with_format("gif").url
+                if after.avatar.is_animated()
+                else after.avatar.with_format("png").url,
                 "busergatepending": before.pending,
                 "ausergatepending": after.pending,
                 "busernick": before.nick,
-                "ausernick": after.nick
+                "ausernick": after.nick,
             }
             async with self.bot.db.acquire() as conn:
-                await self.fire_event_dispatch(self.cached_triggers['automod'][before.guild.id]['user_leave'], before.guild, even,
-                                               conn=conn)
+                await self.fire_event_dispatch(
+                    self.cached_triggers["automod"][before.guild.id]["user_leave"], before.guild, even, conn=conn
+                )
 
     @commands.Cog.listener()
     async def on_member_ban(self, guild: discord.Guild, user: discord.User):
         await self.filled.wait()
-        if guild.id not in self.cached_triggers['automod']:
+        if guild.id not in self.cached_triggers["automod"]:
             return
 
-        if "user_ban" in self.cached_triggers['automod'][guild.id]:
+        if "user_ban" in self.cached_triggers["automod"][guild.id]:
             await asyncio.sleep(0.5)
 
             if guild.me.guild_permissions.view_audit_log:
@@ -364,22 +411,25 @@ class Dispatch(commands.Cog):
                 "usercreatedat": user.created_at,
                 "userisbot": user.bot,
                 "username": str(user),
-                "useravatar": user.avatar.with_format("gif").url if user.avatar.is_animated() else user.avatar.with_format("png").url,
+                "useravatar": user.avatar.with_format("gif").url
+                if user.avatar.is_animated()
+                else user.avatar.with_format("png").url,
                 "reason": reason,
                 "moderator": moderator,
-                "moderatorid": modid
+                "moderatorid": modid,
             }
             async with self.bot.db.acquire() as conn:
-                await self.fire_event_dispatch(self.cached_triggers['automod'][guild.id]['user_ban'], guild, even,
-                                               conn=conn)
+                await self.fire_event_dispatch(
+                    self.cached_triggers["automod"][guild.id]["user_ban"], guild, even, conn=conn
+                )
 
     @commands.Cog.listener()
     async def on_member_unban(self, guild: discord.Guild, user: discord.User):
         await self.filled.wait()
-        if guild.id not in self.cached_triggers['automod']:
+        if guild.id not in self.cached_triggers["automod"]:
             return
 
-        if "user_unban" in self.cached_triggers['automod'][guild.id]:
+        if "user_unban" in self.cached_triggers["automod"][guild.id]:
             await asyncio.sleep(0.5)
 
             if guild.me.guild_permissions.view_audit_log:
@@ -404,11 +454,14 @@ class Dispatch(commands.Cog):
                 "usercreatedat": user.created_at,
                 "userisbot": user.bot,
                 "username": str(user),
-                "useravatar": user.avatar.with_format("gif").url if user.avatar.is_animated() else user.avatar.with_format("png").url,
+                "useravatar": user.avatar.with_format("gif").url
+                if user.avatar.is_animated()
+                else user.avatar.with_format("png").url,
                 "reason": reason,
                 "moderator": moderator,
-                "moderatorid": modid
+                "moderatorid": modid,
             }
             async with self.bot.db.acquire() as conn:
-                await self.fire_event_dispatch(self.cached_triggers['automod'][guild.id]['user_unban'], guild, even,
-                                               conn=conn)
+                await self.fire_event_dispatch(
+                    self.cached_triggers["automod"][guild.id]["user_unban"], guild, even, conn=conn
+                )
