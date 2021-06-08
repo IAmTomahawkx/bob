@@ -1,4 +1,5 @@
 error-channel = "#alpha_uhoh"
+mute-role = "Muted"
 
 [[selfrole]]
 mode = "command"
@@ -30,8 +31,8 @@ decay = "1/30d"
 name = "warn"
 actions = [
     { counter = "warnings", modify = 1, target = "$userid" },
-    { dispatch = "kick", if = "%warnings($userid) >= 5"},
-    { dispatch = "ban", if = "%warnings($userid) >= 10"}
+    { dispatch = "kick", if = "%warnings($userid) == 5", args = { context = "Automatic kick for having 5 warnings"}},
+    { dispatch = "ban", if = "%warnings($userid) >= 10", args = { context = "Automatic ban for having 10 warnings"}}
 ]
 
 [[event]]
@@ -43,7 +44,13 @@ actions = [
 [[event]]
 name = "kick"
 actions = [
-    { do = "$kick($userid)" }
+    { do = "$kick($userid, $context)" } # kick/ban/mute will automatically create a new case. No need to make one yourself!
+]
+
+[[event]]
+name = "ban"
+actions = [
+    { do = "$ban($userid, $context)" } # This will also automatically create a new case.
 ]
 
 [[logging]]

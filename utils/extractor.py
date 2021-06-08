@@ -58,6 +58,9 @@ async def parse_guild_config(cfg: str, ctx: Context) -> GuildConfig:
 
     config.error_channel = await resolve_channel(ctx, parsed["error-channel"], "error-channel")
 
+    if "mute-role" in parsed:
+        config.mute_role = await resolve_role(ctx, parsed['mute-role'], "mute-role")
+
     if "selfrole" in parsed:
         config.selfroles = await parse_guild_selfroles(ctx, parsed["selfrole"])
 

@@ -129,10 +129,11 @@ class Config(commands.Cog):
                 await update_msg()
 
                 new_id = await conn.fetchval(
-                    "INSERT INTO configs (guild_id, store_messages, error_channel) VALUES ($1, $2, $3) RETURNING id",
+                    "INSERT INTO configs (guild_id, store_messages, error_channel, mute_role) VALUES ($1, $2, $3, $4) RETURNING id",
                     ctx.guild.id,
                     any(x in cfg.automod_events for x in ("message_delete", "message_edit")),
                     cfg.error_channel,
+                    cfg.mute_role
                 )
                 rows = await conn.fetch(
                     "DELETE FROM events "

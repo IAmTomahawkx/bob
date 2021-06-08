@@ -9,7 +9,8 @@ CREATE TABLE IF NOT EXISTS configs
     id SERIAL PRIMARY KEY,
     guild_id BIGINT NOT NULL,
     store_messages BOOL NOT NULL,
-    error_channel BIGINT NOT NULL
+    error_channel BIGINT NOT NULL,
+    mute_role BIGINT
 );
 CREATE TABLE IF NOT EXISTS counters
 (

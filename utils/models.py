@@ -172,6 +172,7 @@ class GuildConfig:
     def __init__(self, guild_id: int):
         self.guild_id = guild_id
         self.error_channel: Optional[int] = None
+        self.mute_role: Optional[int] = None
         self.id: Optional[int] = None
         self.selfroles: List[SelfRole] = []
         self.counters: Dict[str, ConfigCounter] = {}
