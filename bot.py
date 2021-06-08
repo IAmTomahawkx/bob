@@ -3,6 +3,7 @@ from utils.bot import Bot
 
 try:
     import prettify_exceptions
+
     prettify_exceptions.hook()
 except:
     pass

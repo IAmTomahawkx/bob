@@ -23,7 +23,7 @@ class ExecutionInterrupt(Exception):
 
 
 class ParsingContext:
-    def __init__(self, bot: Bot, guild: discord.Guild, invoker: Optional[discord.Member], is_dummy = False):
+    def __init__(self, bot: Bot, guild: discord.Guild, invoker: Optional[discord.Member], is_dummy=False):
         self.bot = bot
         self.dummy = is_dummy
         self.guild = guild
@@ -93,7 +93,7 @@ class ParsingContext:
 
         for x in data:
             self.actions[x["id"]] = dict(x)
-            self.actions[x["id"]]["args"] = x["args"] and ujson.loads(x['args'])
+            self.actions[x["id"]]["args"] = x["args"] and ujson.loads(x["args"])
 
     async def run_event(self, name: str, conn: asyncpg.Connection, stack: List[str] = None, vbls: PARSE_VARS = None):
         await self.fetch_required_data()
@@ -135,9 +135,9 @@ class ParsingContext:
             act = self.actions[runner]
             stack.append(f"parse action #{i}")
             args = (vbls and vbls.copy()) or {}
-            if act['args']:
+            if act["args"]:
                 stack.append(f"'args' values parsing")
-                args.update({k.strip("$"): await self.format_fmt(v, conn, stack, args) for k, v in act['args'].items()})
+                args.update({k.strip("$"): await self.format_fmt(v, conn, stack, args) for k, v in act["args"].items()})
 
             await self.run_action(act, conn, args, stack, i)
 
@@ -293,7 +293,7 @@ class ParsingContext:
         stack.pop()
         return cond
 
-    async def parse_input(self, parsable: str, stack: List[str], strict_errors = True) -> List[BaseAst]:
+    async def parse_input(self, parsable: str, stack: List[str], strict_errors=True) -> List[BaseAst]:
         tokens = arg_lex.run_lex(parsable)
         output: List[Union[BiOpExpr, CounterAccess, VariableAccess, Literal]] = []
         depth: List[Union[CounterAccess, VariableAccess, Literal]] = []  # noqa
@@ -304,7 +304,6 @@ class ParsingContext:
         def _whitespace(token):
             if not strict_errors and not depth:
                 output.append(Literal(token, stack))
-
 
         def _error(token):
             nonlocal depth, last
@@ -381,7 +380,7 @@ class ParsingContext:
             "POut": _pout,
             "PIn": _pin,
             "Literal": _literal,
-            "Error": _error
+            "Error": _error,
         }
         for _token in it:
             t = typs.get(_token.name)
@@ -395,7 +394,9 @@ class ParsingContext:
                     output.append(BiOpExpr(_token, stack))
 
         true_output = []
-        it: Iterator[Tuple[int, Union[BiOpExpr, VariableAccess, CounterAccess, Literal]]] = iter(enumerate(output)) # noqa
+        it: Iterator[Tuple[int, Union[BiOpExpr, VariableAccess, CounterAccess, Literal]]] = iter(
+            enumerate(output)
+        )  # noqa
         for i, x in it:
             if isinstance(x, BiOpExpr):
                 if not true_output:
@@ -531,8 +532,9 @@ class VariableAccess(BaseAst):
         raise ExecutionInterrupt(
             f"| {{parsable}}\n| {' ' * self.token.start}{'^' * (self.token.end - self.token.start)}\n| "
             f"Variable '{self.value}' not found in this context",
-            self.stack
+            self.stack,
         )
+
 
 class BiOpExpr(BaseAst):
     __slots__ = "left", "right"
@@ -600,6 +602,7 @@ class Literal(BaseAst):
 
     async def access(self, ctx: ParsingContext, vbls: Optional[PARSE_VARS], conn: asyncpg.Connection) -> Any:
         return self.value
+
 
 class Whitespace(BaseAst):
     async def access(self, ctx: ParsingContext, vbls: Optional[PARSE_VARS], conn: asyncpg.Connection) -> Any:

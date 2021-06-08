@@ -20,9 +20,11 @@ __all__ = ("Bot",)
 
 try:
     import prettify_exceptions
+
     formatter = prettify_exceptions.DefaultFormatter()
 except:
     import traceback as formatter
+
 
 class _CaseInsensitiveDict(dict):
     def __contains__(self, k):
