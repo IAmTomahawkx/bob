@@ -21,6 +21,58 @@ STEPS = [
     "Updating selfroles",
 ]
 
+def get_action_args(act: Actions) -> tuple:
+    keys = set(act.keys())
+    actions = {
+        "counter" in keys or 0: lambda: (
+            ActionTypes.counter,
+            act["counter"],
+            act["condition"],
+            act["modify"],
+            act["target"],
+            None,
+            act.get("args") and ujson.dumps(act["args"])
+        ),
+        "do" in keys or 2: lambda: (
+            ActionTypes.do,
+            act["do"],
+            act["condition"],
+            None,
+            None,
+            None,
+            act.get("args") and ujson.dumps(act["args"])
+        ),
+        "log" in keys or 3: lambda: (
+            ActionTypes.log,
+            act["log"],
+            act["condition"],
+            None,
+            None,
+            act["event"],
+            act.get("args") and ujson.dumps(act["args"])
+        ),
+        "dispatch" in keys or 4: lambda: (
+            ActionTypes.dispatch,
+            act["dispatch"],
+            act["condition"],
+            None,
+            None,
+            None,
+            act.get("args") and ujson.dumps(act["args"])
+        ),
+        "reply" in keys or 5: lambda: (
+            ActionTypes.reply,
+            act['reply'],
+            act['condition'],
+            None,
+            None,
+            None,
+            act.get("args") and ujson.dumps(act["args"])
+        )
+    }
+
+    return actions[True]() # do as i say, not as i do
+
 
 class Config(commands.Cog):
     def __init__(self, bot: Bot):
@@ -37,48 +89,7 @@ class Config(commands.Cog):
                 acts.append(
                     await conn.fetchval(
                         "INSERT INTO actions (type, main_text, condition, modify, target, event, args) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id",
-                        *(
-                            ActionTypes.counter,
-                            act["counter"],
-                            act["condition"],
-                            act["modify"],
-                            act["target"],
-                            None,
-                            act.get("args") and ujson.dumps(act["args"]),
-                        )
-                        if "counter" in act
-                        else (
-                            (
-                                ActionTypes.dispatch,
-                                act["dispatch"],
-                                act["condition"],
-                                None,
-                                None,
-                                act.get("args") and ujson.dumps(act["args"]),
-                            )
-                            if "dispatch" in act
-                            else (
-                                (
-                                    ActionTypes.do,
-                                    act["do"],
-                                    act["condition"],
-                                    None,
-                                    None,
-                                    None,
-                                    act.get("args") and ujson.dumps(act["args"]),
-                                )
-                                if "do" in act
-                                else (
-                                    ActionTypes.log,
-                                    act["log"],
-                                    act["condition"],
-                                    None,
-                                    None,
-                                    act["event"],
-                                    act.get("args") and ujson.dumps(act["args"]),
-                                )
-                            )
-                        ),
+                        *get_action_args(act)
                     )
                 )
 

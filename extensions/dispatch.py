@@ -60,12 +60,12 @@ class Dispatch(commands.Cog):
         self.filled.set()
 
     async def fire_event_dispatch(
-        self, event: dict, guild: discord.Guild, kwargs: Dict[str, Union[str, int, bool]], conn: asyncpg.Connection
+        self, event: dict, guild: discord.Guild, kwargs: Dict[str, Union[str, int, bool]], conn: asyncpg.Connection, message: discord.Message=None
     ):
         ctx = parse.ParsingContext(self.bot, guild, None)
         print(event)
         try:
-            await ctx.run_automod(event, conn, None, kwargs)
+            await ctx.run_automod(event, conn, None, kwargs, messageable=message)
         except parse.ExecutionInterrupt as e:
             g = guild.get_channel(self.cached_triggers["configs"][guild.id]["error_channel"])
             if g:  # drop it silently if it got deleted
@@ -101,7 +101,7 @@ class Dispatch(commands.Cog):
                     [x.proxy_url for x in message.attachments],
                 )
                 await self.fire_event_dispatch(
-                    self.cached_triggers["automod"][message.guild.id]["message"], message.guild, even, conn=conn
+                    self.cached_triggers["automod"][message.guild.id]["message"], message.guild, even, conn=conn, message=message # noqa
                 )
 
     @commands.Cog.listener()

@@ -445,7 +445,10 @@ async def parse_action(action: Dict[str, Any], context: str, n: int) -> Actions:
             )
 
     elif "do" in action:
-        return DoAction(do=str(action["do"]), condition=action.get("if") and str(action["if"]), args=action.get("args"))
+        return DoAction(do=str(action["do"]), condition=action.get("if") and str(action["if"]) and str(action["if"]), args=action.get("args"))
+
+    elif "reply" in action:
+        return ReplyAction(reply=action['reply'], condition=action.get("if") and str(action["if"]), args=action.get("args"))
 
     else:
         raise ConfigLoadError(f"Failed to parse actions ({context}, #{n}). Unknown action")

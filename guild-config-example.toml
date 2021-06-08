@@ -26,13 +26,9 @@ per-user = true
 initial-count = 0
 decay = "1/30d"
 
-[[counter]]
-name = "next-case-number"
-
 [[event]]
 name = "warn"
 actions = [
-    { counter = "next-case-number", modify = 1 },
     { counter = "warnings", modify = 1, target = "$userid" },
     { dispatch = "kick", if = "%warnings($userid) >= 5"},
     { dispatch = "ban", if = "%warnings($userid) >= 10"}
@@ -41,7 +37,6 @@ actions = [
 [[event]]
 name = "pardon"
 actions = [
-    { counter = "case-number", modify = 1, target = "$userid" },
     { counter = "warnings", modify = -1, target = "$userid" }
 ]
 
@@ -54,7 +49,7 @@ actions = [
 [[logging]]
 name = "public-log"
 channel = "#logs" # or channel id
-format = "$target ($target) was $action ed by $user ($userid) in $channel ($channelid) for reason: $reason"
+format = "$target \\($target\\) was $action ed by $user \\($userid\\) in $channel \\($channelid\\) for reason: $reason"
 
 [[logging]]
 name = "mod-log"
@@ -64,7 +59,6 @@ format.ban = "$user was banned by $mod for reason: `$reason`"
 format.warn = "$user was warned by $mod for reason: `$reason`"
 format.history-join = "$target has joined. They have more than 5 previous cases"
 
-# Built in impl, but show it anyways
 [[command]]
 name = "warn"
 arguments = [
@@ -72,9 +66,9 @@ arguments = [
     { name = "reason", type = "text", consume = "all"}
 ]
 actions = [
-    { do = "$savecase($target, $user, %next-case-number, $reason)" },
-    { dispatch = "warn", args = { reason = "$reason", target = "$target", targetid = "$targetid" } },
-    "Warned $target"
+    { do = "$newcase($targetid, $authorid, $reason, $messagelink, 'warn')" },
+    { dispatch = "warn", args = { reason = "$reason", target = "$targetname", targetid = "$targetid" } },
+    { reply = "Warned $targetname" }
 ]
 
 [[automod]]

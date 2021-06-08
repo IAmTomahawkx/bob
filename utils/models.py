@@ -21,6 +21,7 @@ __all__ = (
     "Automod",
     "AutomodIgnore",
     "GuildConfig",
+    "ReplyAction"
 )
 
 
@@ -29,7 +30,8 @@ class ActionTypes:
     dispatch = 2
     log = 3
     do = 4
-    reversed = {1: "counter", 2: "dispatch", 3: "log", 4: "do"}
+    reply = 5
+    reversed = {1: "counter", 2: "dispatch", 3: "log", 4: "do", 5: "reply"}
 
 
 class AnyAction(TypedDict):
@@ -43,10 +45,15 @@ class AnyAction(TypedDict):
     args: Optional[Dict[str, Union[str, int, bool]]]
 
 
+class ReplyAction(TypedDict):
+    reply: str
+    condition: Optional[str]
+    args: Optional[Dict[str, Union[str, int, bool]]]
+
 class CounterAction(TypedDict):
     counter: str
     modify: int
-    condition: str
+    condition: Optional[str]
     target: Optional[str]
     args: Optional[Dict[str, Union[str, int, bool]]]
 
@@ -70,7 +77,7 @@ class DoAction(TypedDict):
     args: Optional[Dict[str, Union[str, int, bool]]]
 
 
-Actions = Union[CounterAction, DispatchAction, LogAction, DoAction]
+Actions = Union[CounterAction, DispatchAction, LogAction, DoAction, ReplyAction]
 
 
 class SelfRoleMode(Enum):

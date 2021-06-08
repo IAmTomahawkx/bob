@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Optional, List, Dict, Union, Iterator, Tuple, Any
+from typing import Optional, List, Dict, Union, Any
 
 import asyncpg
 import discord
@@ -95,7 +95,7 @@ class ParsingContext:
             self.actions[x["id"]] = dict(x)
             self.actions[x["id"]]["args"] = x["args"] and ujson.loads(x["args"])
 
-    async def run_event(self, name: str, conn: asyncpg.Connection, stack: List[str] = None, vbls: PARSE_VARS = None):
+    async def run_event(self, name: str, conn: asyncpg.Connection, stack: List[str] = None, vbls: PARSE_VARS = None, messageable: discord.abc.Messageable=None):
         await self.fetch_required_data()
         stack = stack or ["<dispatch>"]
 
@@ -114,10 +114,22 @@ class ParsingContext:
 
         for dispatch in self.events[name]:
             for i, runner in enumerate(dispatch["actions"]):
-                await self.run_action(self.actions[runner], conn, vbls, stack, i)
+                if not messageable and runner['type'] == ActionTypes.reply:
+                    continue
+
+                stack.append(f"parse action #{i}")
+                args = (vbls and vbls.copy()) or {}
+                if runner["args"]:
+                    stack.append(f"'args' values parsing")
+                    args.update(
+                        {k.strip("$"): await self.format_fmt(v, conn, stack, args) for k, v in runner["args"].items()})
+
+                r = await self.run_action(self.actions[runner], conn, args, stack, i)
+                if r and messageable:
+                    await messageable.send(r)
 
     async def run_automod(
-        self, automod: dict, conn: asyncpg.Connection, stack: List[str] = None, vbls: PARSE_VARS = None
+        self, automod: dict, conn: asyncpg.Connection, stack: List[str] = None, vbls: PARSE_VARS = None, messageable: discord.abc.Messageable=None
     ):
         await self.fetch_required_data()
         stack = stack or ["<dispatch>"]
@@ -139,7 +151,9 @@ class ParsingContext:
                 stack.append(f"'args' values parsing")
                 args.update({k.strip("$"): await self.format_fmt(v, conn, stack, args) for k, v in act["args"].items()})
 
-            await self.run_action(act, conn, args, stack, i)
+            r = await self.run_action(act, conn, args, stack, i)
+            if r and messageable:
+                await messageable.send(r)
 
     async def run_logger(
         self, name: str, event: str, conn: asyncpg.Connection, stack: List[str], vbls: PARSE_VARS = None
@@ -256,7 +270,7 @@ class ParsingContext:
 
     async def run_action(
         self, action: AnyAction, conn: asyncpg.Connection, vbls: Optional[PARSE_VARS], stack: List[str], n: int = None
-    ):
+    ) -> Optional[str]:
         stack = stack.copy()
         stack.append(f"action #{n} (type: {ActionTypes.reversed[action['type']]})")
 
@@ -271,6 +285,10 @@ class ParsingContext:
         elif action["type"] == ActionTypes.counter:
             if await self.calculate_conditional(action["condition"], stack, vbls, conn):
                 await self.alter_counter(action["main_text"], conn, stack, action["modify"], action["target"], vbls)
+
+        elif action['type'] == ActionTypes.reply:
+            if await self.calculate_conditional(action["condition"], stack, vbls, conn):
+                return await self.format_fmt(action['main_text'], conn, stack, vbls)
 
     async def calculate_conditional(
         self, condition: Optional[str], stack: List[str], vbls: Optional[PARSE_VARS], conn: asyncpg.Connection
@@ -299,7 +317,7 @@ class ParsingContext:
         depth: List[Union[CounterAccess, VariableAccess, Literal]] = []  # noqa
         last = None
 
-        it: Iterator[arg_lex.Token] = iter(tokens)
+        it = iter(tokens)
 
         def _whitespace(token):
             if not strict_errors and not depth:
@@ -325,6 +343,10 @@ class ParsingContext:
 
         def _pin(token):
             nonlocal depth, last
+            if not depth and isinstance(output[-1], Literal) and str(output[-1].value).endswith("\\"):
+                output[-1].value = output[-1].value.rstrip("\\") + "("
+                return
+
             if depth and last is depth[-1]:
                 raise ExecutionInterrupt(
                     f"| {parsable}\n| {' '*token.start}{'^'*(token.end-token.start)}\n| Doubled in-parentheses",
@@ -341,6 +363,10 @@ class ParsingContext:
 
         def _pout(token):
             nonlocal depth, last
+            if not depth and isinstance(output[-1], Literal) and str(output[-1].value).endswith("\\"):
+                output[-1].value = output[-1].value.rstrip("\\") + ")"
+                return
+
             if not depth:
                 raise ExecutionInterrupt(
                     f"| {parsable}\n| {' '*token.start}{'^'*(token.end-token.start)}\n| Unexpected out-parentheses",
@@ -394,9 +420,7 @@ class ParsingContext:
                     output.append(BiOpExpr(_token, stack))
 
         true_output = []
-        it: Iterator[Tuple[int, Union[BiOpExpr, VariableAccess, CounterAccess, Literal]]] = iter(
-            enumerate(output)
-        )  # noqa
+        it = iter(enumerate(output))
         for i, x in it:
             if isinstance(x, BiOpExpr):
                 if not true_output:
@@ -407,7 +431,7 @@ class ParsingContext:
 
                 x.left = true_output.pop()
                 try:
-                    x.right = next(it)[1]
+                    x.right = next(it)[1] # noqa
                 except StopIteration:
                     raise ExecutionInterrupt(
                         f"| {parsable}\n| {' '*x.token.start}{'^'*(x.token.end-x.token.start)}\n| "
