@@ -44,7 +44,7 @@ class Config(commands.Cog):
                             act["modify"],
                             act["target"],
                             None,
-                            None,
+                            act.get("args") and ujson.dumps(act['args']),
                         )
                         if "counter" in act
                         else (

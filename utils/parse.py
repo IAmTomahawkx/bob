@@ -23,11 +23,11 @@ class ExecutionInterrupt(Exception):
 
 
 class ParsingContext:
-    def __init__(self, bot: Bot, guild: discord.Guild, invoker: Optional[discord.Member]):
+    def __init__(self, bot: Bot, guild: discord.Guild, invoker: Optional[discord.Member], is_dummy = False):
         self.bot = bot
+        self.dummy = is_dummy
         self.guild = guild
         self.invoker = invoker
-        self.variables: PARSE_VARS = {}
         self._cfg_id: Optional[int] = None
         self.events = {}
         self.loggers = {}
@@ -60,7 +60,6 @@ class ParsingContext:
             INNER JOIN loggers l on logger_formats.logger_id = l.id
             WHERE l.cfg_id = $1
             """
-            print(self._cfg_id)
             loggers = await conn.fetch(query, cfg_id)
 
         self.events = {}
@@ -94,7 +93,7 @@ class ParsingContext:
 
         for x in data:
             self.actions[x["id"]] = dict(x)
-            self.actions[x["id"]]["args"] = x["args"]
+            self.actions[x["id"]]["args"] = x["args"] and ujson.loads(x['args'])
 
     async def run_event(self, name: str, conn: asyncpg.Connection, stack: List[str] = None, vbls: PARSE_VARS = None):
         await self.fetch_required_data()
@@ -129,17 +128,23 @@ class ParsingContext:
             await self.link(unlinked, conn)
 
         stack.append(
-            f"Automod trigger '{automod['event']}'"
+            f"automod trigger '{automod['event']}'"
         )  # at this point it's safe to assume that the dispatching can go ahead
 
         for i, runner in enumerate(automod["actions"]):
-            await self.run_action(self.actions[runner], conn, vbls, stack, i)
+            act = self.actions[runner]
+            stack.append(f"parse action #{i}")
+            args = (vbls and vbls.copy()) or {}
+            if act['args']:
+                stack.append(f"'args' values parsing")
+                args.update({k.strip("$"): await self.format_fmt(v, conn, stack, args) for k, v in act['args'].items()})
+
+            await self.run_action(act, conn, args, stack, i)
 
     async def run_logger(
         self, name: str, event: str, conn: asyncpg.Connection, stack: List[str], vbls: PARSE_VARS = None
     ):
         await self.fetch_required_data()
-        print(self.loggers)
         logger = self.loggers[name]
         stack.append(f"Logger '{name}' @ event '{event}'")
         if event in logger["formats"]:
@@ -154,7 +159,7 @@ class ParsingContext:
             raise ExecutionInterrupt(f"Channel does not exist for logger {name}", stack)
 
         try:
-            await channel.send(await self.format_fmt(fmt, conn, vbls))
+            await channel.send(await self.format_fmt(fmt, conn, stack, vbls))
         except discord.HTTPException as e:
             raise ExecutionInterrupt(f"Failed to send message to logger '{name}': {e}", stack)
 
@@ -163,8 +168,18 @@ class ParsingContext:
     async def run_command(self, name: str, msg: discord.Message):
         await self.fetch_required_data()
 
-    async def format_fmt(self, fmt: str, conn: asyncpg.Connection, vbls: PARSE_VARS = None):
-        return fmt  # TODO
+    async def format_fmt(self, fmt: str, conn: asyncpg.Connection, stack: List[str], vbls: PARSE_VARS = None):
+        stack.append(f"formatting string '{fmt}'")
+        as_ast = await self.parse_input(fmt, stack, strict_errors=False)
+        try:
+            v = [str(await x.access(self, vbls, conn)) for x in as_ast]
+        except ExecutionInterrupt as e:
+            e.msg = e.msg.format(parsable=fmt)
+            raise
+
+        resp = "".join(v)
+        stack.pop()
+        return resp
 
     async def alter_counter(
         self,
@@ -278,87 +293,114 @@ class ParsingContext:
         stack.pop()
         return cond
 
-    async def parse_input(self, parsable: str, stack: List[str]) -> List[BaseAst]:
+    async def parse_input(self, parsable: str, stack: List[str], strict_errors = True) -> List[BaseAst]:
         tokens = arg_lex.run_lex(parsable)
-        output = []
-        depth: List[Union[CounterAccess, VariableAccess]] = []  # noqa
+        output: List[Union[BiOpExpr, CounterAccess, VariableAccess, Literal]] = []
+        depth: List[Union[CounterAccess, VariableAccess, Literal]] = []  # noqa
         last = None
 
         it: Iterator[arg_lex.Token] = iter(tokens)
-        for token in it:
-            if token.name == "Error":
+
+        def _whitespace(token):
+            if not strict_errors and not depth:
+                output.append(Literal(token, stack))
+
+
+        def _error(token):
+            nonlocal depth, last
+            if strict_errors:
                 raise ExecutionInterrupt(
-                    f"| {parsable}\n| {' '*token.start}{'^'*(token.end-token.start)}\n| Unknown token", stack
+                    f"| {parsable}\n| {' ' * token.start}{'^' * (token.end - token.start)}\n| Unknown token", stack
+                )
+            else:
+                try:
+                    if depth:
+                        depth[-1] += token.value
+                    else:
+                        output[-1] += token.value
+                except:  # noqa
+                    if depth:
+                        depth.append(Literal(token, stack))
+                    else:
+                        output.append(Literal(token, stack))
+
+        def _pin(token):
+            nonlocal depth, last
+            if depth and last is depth[-1]:
+                raise ExecutionInterrupt(
+                    f"| {parsable}\n| {' '*token.start}{'^'*(token.end-token.start)}\n| Doubled in-parentheses",
+                    stack,
                 )
 
-            if token.name == "PIn":
-                if depth and last is depth[-1]:
-                    raise ExecutionInterrupt(
-                        f"| {parsable}\n| {' '*token.start}{'^'*(token.end-token.start)}\n| Doubled in-parentheses",
-                        stack,
-                    )
+            if not isinstance(last, (CounterAccess, VariableAccess)):
+                raise ExecutionInterrupt(
+                    f"| {parsable}\n| {' '*token.start}{'^'*(token.end-token.start)}\n| Unexpected in-parentheses",
+                    stack,
+                )
 
-                if not isinstance(last, (CounterAccess, VariableAccess)):
-                    raise ExecutionInterrupt(
-                        f"| {parsable}\n| {' '*token.start}{'^'*(token.end-token.start)}\n| Unexpected in-parentheses",
-                        stack,
-                    )
+            depth.append(last)
 
-                depth.append(last)
-                continue
+        def _pout(token):
+            nonlocal depth, last
+            if not depth:
+                raise ExecutionInterrupt(
+                    f"| {parsable}\n| {' '*token.start}{'^'*(token.end-token.start)}\n| Unexpected out-parentheses",
+                    stack,
+                )
 
-            elif token.name == "POut":
-                if not depth:
-                    raise ExecutionInterrupt(
-                        f"| {parsable}\n| {' '*token.start}{'^'*(token.end-token.start)}\n| Unexpected out-parentheses",
-                        stack,
-                    )
+            depth.pop()
 
-                depth.pop()
-                continue
+        def _counter(token):
+            nonlocal depth, last
+            last = CounterAccess(token, stack)
+            if depth:
+                depth[-1].args.append(last)
+            else:
+                output.append(last)
 
-            elif token.name == "Counter":
-                last = CounterAccess(token, stack)
+        def _var(token):
+            nonlocal depth, last
+            last = VariableAccess(token, stack)
+            if depth:
+                depth[-1].args.append(last)
+            else:
+                output.append(last)
+
+        def _literal(token):
+            nonlocal depth, last
+            last = Literal(token, stack)
+            if depth:
+                depth[-1].args.append(last)
+            else:
+                output.append(last)
+
+        typs = {
+            "Whitespace": _whitespace,
+            "Var": _var,
+            "Counter": _counter,
+            "POut": _pout,
+            "PIn": _pin,
+            "Literal": _literal,
+            "Error": _error
+        }
+        for _token in it:
+            t = typs.get(_token.name)
+            if t:
+                t(_token)
+
+            elif _token.name in ("EQ", "NEQ", "SEQ", "GEQ", "SQ", "GQ"):
                 if depth:
-                    depth[-1].args.append(last)
+                    depth[-1].args.append(BiOpExpr(_token, stack))
                 else:
-                    output.append(last)
-
-                continue
-
-            elif token.name == "Var":
-                last = VariableAccess(token, stack)
-                if depth:
-                    depth[-1].args.append(last)
-                else:
-                    output.append(last)
-
-                continue
-
-            elif token.name in ("EQ", "NEQ", "SEQ", "GEQ", "SQ", "GQ"):
-                if depth:
-                    depth[-1].args.append(BiOpExpr(token, stack))
-                else:
-                    output.append(BiOpExpr(token, stack))
-
-                continue
-
-            elif token.name == "Literal":
-                last = Literal(token, stack)
-                if depth:
-                    depth[-1].args.append(last)
-                else:
-                    output.append(last)
-
-                continue
+                    output.append(BiOpExpr(_token, stack))
 
         true_output = []
-        it: Iterator[Tuple[int, arg_lex.Token]] = iter(enumerate(output))  # noqa
+        it: Iterator[Tuple[int, Union[BiOpExpr, VariableAccess, CounterAccess, Literal]]] = iter(enumerate(output)) # noqa
         for i, x in it:
             if isinstance(x, BiOpExpr):
                 if not true_output:
                     raise ExecutionInterrupt(
-                        f"| {parsable}\n| {' '*(x.token.end-x.token.start)}{'^'*(x.token.end-x.token.start)}\n| Unexpected comparison here",
+                        f"| {parsable}\n| {' '*x.token.start}{'^'*(x.token.end-x.token.start)}\n| Unexpected comparison here",
                         stack,
                     )
 
@@ -367,7 +409,7 @@ class ParsingContext:
                     x.right = next(it)[1]
                 except StopIteration:
                     raise ExecutionInterrupt(
-                        f"| {parsable}\n| {' '*(x.token.end-x.token.start)}{'^'*(x.token.end-x.token.start)}\n| "
+                        f"| {parsable}\n| {' '*x.token.start}{'^'*(x.token.end-x.token.start)}\n| "
                         "Unexpected comparison here (missing something to compare to)",
                         stack,
                     )
@@ -375,7 +417,7 @@ class ParsingContext:
                 true_output.append(x)
                 continue
 
-            elif isinstance(x, (CounterAccess, VariableAccess)):
+            elif isinstance(x, (CounterAccess, VariableAccess, Literal)):
                 true_output.append(x)
 
         return true_output
@@ -400,6 +442,9 @@ class CounterAccess(BaseAst):
         super().__init__(t, stack)
         self.value = t.value.lstrip("%")
         self.args: List[BaseAst] = []
+
+    def __repr__(self):
+        return f"<CounterAccess {self.value} args={self.args}>"
 
     async def access(self, ctx: ParsingContext, vbls: Optional[PARSE_VARS], conn: asyncpg.Connection) -> int:
         if self.value not in ctx.counters:
@@ -471,11 +516,23 @@ class VariableAccess(BaseAst):
         self.value = t.value.lstrip("$")
         self.args: List[BaseAst] = []
 
+    def __repr__(self):
+        return f"<VariableAccess {self.value} args={self.args}>"
+
     async def access(
         self, ctx: ParsingContext, vbls: Optional[PARSE_VARS], conn: asyncpg.Connection
     ) -> Union[int, str, bool]:
-        raise NotImplementedError
+        if vbls and self.value in vbls:
+            return vbls[self.value]
 
+        if self.args:
+            raise ExecutionInterrupt(f"{self.value} | builtin variables are not implemented", self.stack)
+
+        raise ExecutionInterrupt(
+            f"| {{parsable}}\n| {' ' * self.token.start}{'^' * (self.token.end - self.token.start)}\n| "
+            f"Variable '{self.value}' not found in this context",
+            self.stack
+        )
 
 class BiOpExpr(BaseAst):
     __slots__ = "left", "right"
@@ -484,6 +541,9 @@ class BiOpExpr(BaseAst):
         super().__init__(t, stack)
         self.left: Optional[BaseAst] = None
         self.right: Optional[BaseAst] = None
+
+    def __repr__(self):
+        return f"<BiOpExpr {self.value} left{self.left} right={self.right}>"
 
     async def access(self, ctx: ParsingContext, vbls: Optional[PARSE_VARS], conn: asyncpg.Connection) -> bool:
         condl = await self.left.access(ctx, vbls, conn)
@@ -531,5 +591,16 @@ class Literal(BaseAst):
         except:
             pass
 
+    def __iadd__(self, other):
+        self.value += other
+        return self
+
+    def __repr__(self):
+        return f"<Literal {self.value}>"
+
+    async def access(self, ctx: ParsingContext, vbls: Optional[PARSE_VARS], conn: asyncpg.Connection) -> Any:
+        return self.value
+
+class Whitespace(BaseAst):
     async def access(self, ctx: ParsingContext, vbls: Optional[PARSE_VARS], conn: asyncpg.Connection) -> Any:
         return self.value

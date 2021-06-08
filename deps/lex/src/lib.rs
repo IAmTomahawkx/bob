@@ -26,9 +26,6 @@ enum Tokenizer {
     #[token(")")]
     POut,
 
-    #[token(",")]
-    VarSep,
-
     #[token("==")]
     EQ,
 
@@ -47,11 +44,13 @@ enum Tokenizer {
     #[token(">")]
     GQ,
 
-    #[regex(r"[0-9]+")]
+    #[regex(r"[0-9]+|'(?:\\'|[^'])*'")]
     Literal,
 
+    #[regex(r"[ \t\n\f]+")]
+    Whitespace,
+
     #[error]
-    #[regex(r"[ \t\n\f]+", logos::skip)]
     ERROR
 }
 
@@ -69,13 +68,12 @@ struct Token {
 }
 
 impl Token {
-    fn from_token(input: &String, token: Tokenizer, r: Span) -> Token {
+    fn from_token(input: &str, token: Tokenizer, r: Span) -> Token {
         let name = match token {
             Tokenizer::Counter => "Counter",
             Tokenizer::Var => "Var",
             Tokenizer::PIn => "PIn",
             Tokenizer::POut => "POut",
-            Tokenizer::VarSep => "VarSep",
             Tokenizer::EQ => "EQ",
             Tokenizer::NEQ => "NEQ",
             Tokenizer::GEQ => "GEQ",
@@ -83,6 +81,7 @@ impl Token {
             Tokenizer::SQ => "SQ",
             Tokenizer::GQ => "GQ",
             Tokenizer::Literal => "Literal",
+            Tokenizer::Whitespace => "Whitespace",
             Tokenizer::ERROR => "Error"
         }.to_string();
         let start = r.start as u32;
@@ -119,7 +118,7 @@ fn arglex(py: Python, m: &PyModule)-> PyResult<()> {
     fn run_lex(input: String) -> PyResult<Vec<Token>> {
         let lex = Tokenizer::lexer(&input);
         let tokens = lex.spanned()
-            .map(|(tok, spn)| Token::from_token(&input, tok, spn))
+            .map(|(tok, spn)| Token::from_token(&input.as_str(), tok, spn))
             .collect::<Vec<Token>>();
 
         Ok(tokens)

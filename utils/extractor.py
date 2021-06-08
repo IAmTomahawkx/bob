@@ -404,6 +404,10 @@ async def parse_guild_commands(cfg: Union[Dict[str, Any], List[Dict[str, Any]]])
 
 
 async def parse_action(action: Dict[str, Any], context: str, n: int) -> Actions:
+    if "args" in action and not isinstance(action["args"], dict):
+        raise ConfigLoadError(f"Failed to parse 'args' for action {n} ({context}). "
+                              f"Expected a dictionary of `variablename = \"$some %stuff\"")
+
     if "counter" in action:
         try:
             return CounterAction(
@@ -411,6 +415,7 @@ async def parse_action(action: Dict[str, Any], context: str, n: int) -> Actions:
                 modify=int(action["modify"]),
                 target=action.get("target") and str(action["target"]),
                 condition=action.get("if") and str(action["if"]),
+                args=action.get("args")
             )
         except KeyError as e:
             raise ConfigLoadError(
@@ -419,12 +424,15 @@ async def parse_action(action: Dict[str, Any], context: str, n: int) -> Actions:
             )
 
     elif "dispatch" in action:
-        return DispatchAction(dispatch=str(action["dispatch"]), condition=action.get("if") and str(action["if"]))
+        return DispatchAction(dispatch=str(action["dispatch"]), condition=action.get("if") and str(action["if"]),
+                              args=action.get("args")
+                              )
 
     elif "log" in action:
         try:
             return LogAction(
-                log=str(action["log"]), event=str(action["event"]), condition=action.get("if") and str(action["if"])
+                log=str(action["log"]), event=str(action["event"]), condition=action.get("if") and str(action["if"]),
+                args=action.get("args")
             )
         except KeyError as e:
             raise ConfigLoadError(
@@ -433,7 +441,9 @@ async def parse_action(action: Dict[str, Any], context: str, n: int) -> Actions:
             )
 
     elif "do" in action:
-        return DoAction(do=str(action["do"]), condition=action.get("if") and str(action["if"]))
+        return DoAction(do=str(action["do"]), condition=action.get("if") and str(action["if"]),
+                        args=action.get("args")
+                        )
 
     else:
         raise ConfigLoadError(f"Failed to parse actions ({context}, #{n}). Unknown action")

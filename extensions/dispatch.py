@@ -102,7 +102,7 @@ class Dispatch(commands.Cog):
                 )
                 await self.fire_event_dispatch(
                     self.cached_triggers["automod"][message.guild.id]["message"], message.guild, even, conn=conn
-                )  # noqa
+                )
 
     @commands.Cog.listener()
     async def on_raw_message_delete(self, payload: discord.RawMessageDeleteEvent):

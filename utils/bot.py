@@ -10,6 +10,7 @@ import aiohttp
 import parsedatetime
 import datetime
 import discord
+import sys
 from discord.ext import commands
 from . import time
 from .context import Context
@@ -17,6 +18,11 @@ from .models import *
 
 __all__ = ("Bot",)
 
+try:
+    import prettify_exceptions
+    formatter = prettify_exceptions.DefaultFormatter()
+except:
+    import traceback as formatter
 
 class _CaseInsensitiveDict(dict):
     def __contains__(self, k):
@@ -132,3 +138,6 @@ class Bot(commands.Bot):
             raise commands.CheckFailure("You have been banned from this bot.")
 
         return True
+
+    async def on_error(self, event_method, *args, **kwargs):
+        print("".join(formatter.format_exc()), file=sys.stderr)

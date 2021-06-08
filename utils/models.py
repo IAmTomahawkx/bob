@@ -40,7 +40,7 @@ class AnyAction(TypedDict):
     modify: Optional[int]
     target: Optional[str]
     event: Optional[str]
-    args: Dict[str, Union[str, int, bool]]
+    args: Optional[Dict[str, Union[str, int, bool]]]
 
 
 class CounterAction(TypedDict):
@@ -48,22 +48,26 @@ class CounterAction(TypedDict):
     modify: int
     condition: str
     target: Optional[str]
+    args: Optional[Dict[str, Union[str, int, bool]]]
 
 
 class DispatchAction(TypedDict):
     dispatch: str
     condition: Optional[str]
+    args: Optional[Dict[str, Union[str, int, bool]]]
 
 
 class LogAction(TypedDict):
     log: str
     event: str
     condition: Optional[str]
+    args: Optional[Dict[str, Union[str, int, bool]]]
 
 
 class DoAction(TypedDict):
     do: str
     condition: Optional[str]
+    args: Optional[Dict[str, Union[str, int, bool]]]
 
 
 Actions = Union[CounterAction, DispatchAction, LogAction, DoAction]
