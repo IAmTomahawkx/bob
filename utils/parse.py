@@ -95,7 +95,14 @@ class ParsingContext:
             self.actions[x["id"]] = dict(x)
             self.actions[x["id"]]["args"] = x["args"] and ujson.loads(x["args"])
 
-    async def run_event(self, name: str, conn: asyncpg.Connection, stack: List[str] = None, vbls: PARSE_VARS = None, messageable: discord.abc.Messageable=None):
+    async def run_event(
+        self,
+        name: str,
+        conn: asyncpg.Connection,
+        stack: List[str] = None,
+        vbls: PARSE_VARS = None,
+        messageable: discord.abc.Messageable = None,
+    ):
         await self.fetch_required_data()
         stack = stack or ["<dispatch>"]
 
@@ -114,7 +121,7 @@ class ParsingContext:
 
         for dispatch in self.events[name]:
             for i, runner in enumerate(dispatch["actions"]):
-                if not messageable and runner['type'] == ActionTypes.reply:
+                if not messageable and runner["type"] == ActionTypes.reply:
                     continue
 
                 stack.append(f"parse action #{i}")
@@ -122,14 +129,20 @@ class ParsingContext:
                 if runner["args"]:
                     stack.append(f"'args' values parsing")
                     args.update(
-                        {k.strip("$"): await self.format_fmt(v, conn, stack, args) for k, v in runner["args"].items()})
+                        {k.strip("$"): await self.format_fmt(v, conn, stack, args) for k, v in runner["args"].items()}
+                    )
 
                 r = await self.run_action(self.actions[runner], conn, args, stack, i)
                 if r and messageable:
                     await messageable.send(r)
 
     async def run_automod(
-        self, automod: dict, conn: asyncpg.Connection, stack: List[str] = None, vbls: PARSE_VARS = None, messageable: discord.abc.Messageable=None
+        self,
+        automod: dict,
+        conn: asyncpg.Connection,
+        stack: List[str] = None,
+        vbls: PARSE_VARS = None,
+        messageable: discord.abc.Messageable = None,
     ):
         await self.fetch_required_data()
         stack = stack or ["<dispatch>"]
@@ -286,9 +299,9 @@ class ParsingContext:
             if await self.calculate_conditional(action["condition"], stack, vbls, conn):
                 await self.alter_counter(action["main_text"], conn, stack, action["modify"], action["target"], vbls)
 
-        elif action['type'] == ActionTypes.reply:
+        elif action["type"] == ActionTypes.reply:
             if await self.calculate_conditional(action["condition"], stack, vbls, conn):
-                return await self.format_fmt(action['main_text'], conn, stack, vbls)
+                return await self.format_fmt(action["main_text"], conn, stack, vbls)
 
     async def calculate_conditional(
         self, condition: Optional[str], stack: List[str], vbls: Optional[PARSE_VARS], conn: asyncpg.Connection
@@ -431,7 +444,7 @@ class ParsingContext:
 
                 x.left = true_output.pop()
                 try:
-                    x.right = next(it)[1] # noqa
+                    x.right = next(it)[1]  # noqa
                 except StopIteration:
                     raise ExecutionInterrupt(
                         f"| {parsable}\n| {' '*x.token.start}{'^'*(x.token.end-x.token.start)}\n| "
