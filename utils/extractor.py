@@ -509,7 +509,3 @@ async def resolve_emoji(ctx: Context, arg: Union[str, int], parse_context: str) 
             return arg
 
         raise InvalidEmojiReference(f"The referenced emoji, {arg}, ({parse_context}), is invalid (not found).")
-
-
-async def resolve_user(ctx: Context, arg: Union[str, int], parse_context: str) -> int:
-    pass  # TODO
