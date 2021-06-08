@@ -547,11 +547,11 @@ class VariableAccess(BaseAst):
     async def access(
         self, ctx: ParsingContext, vbls: Optional[PARSE_VARS], conn: asyncpg.Connection
     ) -> Union[int, str, bool]:
-        if vbls and self.value in vbls:
-            return vbls[self.value]
+        if self.value in FROZEN_BUILTINS: # fast lookup
+            return await BUILTINS[self.value](ctx, conn, vbls, self.args)
 
-        if self.args:
-            raise ExecutionInterrupt(f"{self.value} | builtin variables are not implemented", self.stack)
+        if vbls and self.value in vbls: # potentially slow lookup
+            return vbls[self.value]
 
         raise ExecutionInterrupt(
             f"| {{parsable}}\n| {' ' * self.token.start}{'^' * (self.token.end - self.token.start)}\n| "
@@ -631,3 +631,44 @@ class Literal(BaseAst):
 class Whitespace(BaseAst):
     async def access(self, ctx: ParsingContext, vbls: Optional[PARSE_VARS], conn: asyncpg.Connection) -> Any:
         return self.value
+
+
+# builtins and stuff
+
+BUILTINS = dict()
+
+def _name(n: str, args: int = None):
+    def inner(func):
+        if n in BUILTINS:
+            raise RuntimeError(f"{n} is defined twice")
+
+        BUILTINS[n] = func, args
+        return func
+    return inner
+
+@_name("casecount", 1)
+async def builtin_case_count(ctx: ParsingContext, conn: asyncpg.Connection, vbls: PARSE_VARS, args: List[BaseAst]):
+    pass
+
+@_name("savecase", 5)
+async def builtin_save_case(ctx: ParsingContext, conn: asyncpg.Connection, vbls: PARSE_VARS, args: List[BaseAst]):
+    pass
+
+@_name("editcase", 2) # case id, reason, action?
+async def builtin_edit_case(ctx: ParsingContext, conn: asyncpg.Connection, vbls: PARSE_VARS, args: List[BaseAst]):
+    pass
+
+@_name("pick", 2)
+async def builtin_random(ctx: ParsingContext, conn: asyncpg.Connection, vbls: PARSE_VARS, args: List[BaseAst]):
+    pass
+
+@_name("usercases", 1)
+async def builtin_random(ctx: ParsingContext, conn: asyncpg.Connection, vbls: PARSE_VARS, args: List[BaseAst]):
+    pass
+
+@_name("now")
+async def builtin_random(ctx: ParsingContext, conn: asyncpg.Connection, vbls: PARSE_VARS, args: List[BaseAst]):
+    pass
+
+
+FROZEN_BUILTINS = set(BUILTINS.keys())
