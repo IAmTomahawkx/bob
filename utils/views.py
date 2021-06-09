@@ -34,6 +34,7 @@ def create_selfrole_view(guild: discord.Guild, models: List[SelfRole]) -> Tuple[
 
     return View(), rows
 
+
 class Confirmation(discord.ui.View):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
