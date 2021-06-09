@@ -62,10 +62,10 @@ class Dispatch(commands.Cog):
     async def invalidate_cache_for(self, guild_id: int, conn: asyncpg.Connection):
         await self.filled.wait()
         self.filled.clear()
-        if guild_id in self.cached_triggers['configs']:
-            del self.cached_triggers['configs'][guild_id]
-            del self.cached_triggers['events'][guild_id]
-            del self.cached_triggers['automod'][guild_id]
+        if guild_id in self.cached_triggers["configs"]:
+            del self.cached_triggers["configs"][guild_id]
+            del self.cached_triggers["events"][guild_id]
+            del self.cached_triggers["automod"][guild_id]
 
         data = await conn.fetch(
             """
@@ -75,7 +75,7 @@ class Dispatch(commands.Cog):
             INNER JOIN configs c on c.id = events.cfg_id
             WHERE c.id = (SELECT MAX(id) FROM configs WHERE configs.guild_id = $1)
             """,
-            guild_id
+            guild_id,
         )
         self.cached_triggers["configs"][guild_id] = {
             "id": data[0]["cfg_id"],
@@ -95,7 +95,7 @@ class Dispatch(commands.Cog):
             INNER JOIN configs c on automod.cfg_id = c.id
             WHERE c.id = (SELECT MAX(id) FROM configs WHERE configs.guild_id = $1)
             """,
-            guild_id
+            guild_id,
         )
         self.cached_triggers["automod"][guild_id] = {x["event"]: dict(x) for x in data}
 

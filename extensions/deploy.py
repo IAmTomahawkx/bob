@@ -140,7 +140,7 @@ class Config(commands.Cog):
                     ctx.guild.id,
                     any(x in cfg.automod_events for x in ("message_delete", "message_edit")),
                     cfg.error_channel,
-                    cfg.mute_role
+                    cfg.mute_role,
                 )
                 rows = await conn.fetch(
                     "DELETE FROM events "
@@ -237,7 +237,7 @@ class Config(commands.Cog):
 
             await dispatcher.invalidate_cache_for(ctx.guild.id, conn)
 
-    @commands.command("update-config", aliases=['deploy-config'])
+    @commands.command("update-config", aliases=["deploy-config"])
     @commands.has_guild_permissions(administrator=True)
     async def update_config(self, ctx: context.Context, *, config: converters.ConfigFileConverter = None):
         if not config and not ctx.message.attachments:
@@ -249,7 +249,7 @@ class Config(commands.Cog):
         if ctx.message.attachments:
             try:
                 config = (await ctx.message.attachments[0].read()).decode(encoding="utf8")
-            except: # noqa
+            except:  # noqa
                 return await ctx.reply("Could not download the configuration file provided", mention_author=False)
 
         try:
@@ -261,7 +261,9 @@ class Config(commands.Cog):
     @commands.has_guild_permissions(administrator=True)
     async def clear_config(self, ctx: context.Context):
         conf = Confirmation()
-        rsp = await ctx.reply("Are you sure you want to completely clear the configuration?", view=conf, mention_author=False)
+        rsp = await ctx.reply(
+            "Are you sure you want to completely clear the configuration?", view=conf, mention_author=False
+        )
         await conf.wait()
 
         if not conf.response:
@@ -276,8 +278,7 @@ class Config(commands.Cog):
                     ctx.guild.id,
                 )
                 await conn.execute(
-                    "DELETE FROM loggers "
-                    "WHERE $1 = (SELECT guild_id FROM configs WHERE id = loggers.cfg_id)",
+                    "DELETE FROM loggers " "WHERE $1 = (SELECT guild_id FROM configs WHERE id = loggers.cfg_id)",
                     ctx.guild.id,
                 )
 

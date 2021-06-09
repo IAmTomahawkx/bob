@@ -6,9 +6,8 @@ from .context import Context
 
 from jishaku.codeblocks import codeblock_converter
 
-__all__ = (
-    "ConfigFileConverter",
-)
+__all__ = ("ConfigFileConverter",)
+
 
 class ConfigFileConverter(Converter):
     def __init__(self):
@@ -18,7 +17,7 @@ class ConfigFileConverter(Converter):
         if not self.session:
             self.session = aiohttp.ClientSession(headers={"User-Agent": "BOB discord bot; Configuration sniffer"})
 
-        if argument.startswith("http"): # looks like a url link, follow it
+        if argument.startswith("http"):  # looks like a url link, follow it
             try:
                 async with self.session.get(argument) as resp:
                     if 200 > resp.status > 299:
@@ -29,7 +28,7 @@ class ConfigFileConverter(Converter):
 
             except BadArgument:
                 raise
-            except: # noqa
+            except:  # noqa
                 pass
 
         arg = codeblock_converter(argument)
