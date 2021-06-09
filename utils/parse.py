@@ -1,4 +1,8 @@
 from __future__ import annotations
+
+import datetime
+import random
+import re
 from typing import Optional, List, Dict, Union, Any
 
 import asyncpg
@@ -100,7 +104,7 @@ class ParsingContext:
         stack = stack or ["<dispatch>"]
 
         if name not in self.events:
-            raise ExecutionInterrupt(f"Event '{name}' not found", stack)
+            raise ExecutionInterrupt(f"event '{name}' not found", stack)
 
         unlinked = []
 
@@ -110,21 +114,23 @@ class ParsingContext:
         if unlinked:
             await self.link(unlinked, conn)
 
-        stack.append(f"Event '{name}'")  # at this point it's safe to assume that the dispatching can go ahead
+        stack.append(f"event '{name}'")  # at this point it's safe to assume that the dispatching can go ahead
 
         for dispatch in self.events[name]:
             for i, runner in enumerate(dispatch["actions"]):
+                runner = self.actions[runner]
                 if not messageable and runner['type'] == ActionTypes.reply:
                     continue
 
                 stack.append(f"parse action #{i}")
                 args = (vbls and vbls.copy()) or {}
+
                 if runner["args"]:
                     stack.append(f"'args' values parsing")
                     args.update(
                         {k.strip("$"): await self.format_fmt(v, conn, stack, args) for k, v in runner["args"].items()})
 
-                r = await self.run_action(self.actions[runner], conn, args, stack, i)
+                r = await self.run_action(runner, conn, args, stack, i)
                 if r and messageable:
                     await messageable.send(r)
 
@@ -152,8 +158,12 @@ class ParsingContext:
                 args.update({k.strip("$"): await self.format_fmt(v, conn, stack, args) for k, v in act["args"].items()})
 
             r = await self.run_action(act, conn, args, stack, i)
+            stack.pop()
             if r and messageable:
-                await messageable.send(r)
+                try:
+                    await messageable.send(r)
+                except discord.HTTPException:
+                    pass
 
     async def run_logger(
         self, name: str, event: str, conn: asyncpg.Connection, stack: List[str], vbls: PARSE_VARS = None
@@ -231,6 +241,9 @@ class ParsingContext:
             cnt = self.counters[counter]
         else:
             d = await conn.fetchrow("SELECT * FROM counters WHERE cfg_id = $1 AND name = $2", self._cfg_id, counter)
+            if not d:
+                raise ExecutionInterrupt(f"Unknown counter '{counter}'", stack)
+
             cnt = self.counters[counter] = ConfiguredCounter(
                 id=d["id"],
                 initial_count=d["start"],
@@ -253,13 +266,13 @@ class ParsingContext:
                 """
                 INSERT INTO counter_values VALUES (
                 $1,
-                ($2 + $3),
+                ($2::INT + $3::INT),
                 (NOW() AT TIME ZONE 'utc'),
                 $4
-                ) ON CONFLICT (user_id) DO UPDATE SET val = val + $3
+                ) ON CONFLICT (counter_id, user_id) DO UPDATE SET val = counter_values.val::INT + $3::INT
                 """,
                 cnt["id"],
-                cnt["start"],
+                cnt["initial_count"],
                 modify,
                 target,
             )
@@ -408,12 +421,13 @@ class ParsingContext:
             "Literal": _literal,
             "Error": _error,
         }
+        oprs = {"EQ", "NEQ", "SEQ", "GEQ", "SQ", "GQ", "And", "Or"}
         for _token in it:
             t = typs.get(_token.name)
             if t:
                 t(_token)
 
-            elif _token.name in ("EQ", "NEQ", "SEQ", "GEQ", "SQ", "GQ"):
+            elif _token.name in oprs:
                 if depth:
                     depth[-1].args.append(BiOpExpr(_token, stack))
                 else:
@@ -548,7 +562,13 @@ class VariableAccess(BaseAst):
         self, ctx: ParsingContext, vbls: Optional[PARSE_VARS], conn: asyncpg.Connection
     ) -> Union[int, str, bool]:
         if self.value in FROZEN_BUILTINS: # fast lookup
-            return await BUILTINS[self.value](ctx, conn, vbls, self.args)
+            if len(self.args) < BUILTINS[self.value][1]:
+                raise ExecutionInterrupt(
+                    f"| {{parsable}}\n| {' ' * self.token.start}{'^' * (self.token.end - self.token.start)}\n| "
+                    f"Built in '{self.value}' expected at least {BUILTINS[self.value][1]} arguments, got {len(self.args)}",
+                    self.stack,
+                )
+            return await BUILTINS[self.value][0](ctx, conn, vbls, self.args)
 
         if vbls and self.value in vbls: # potentially slow lookup
             return vbls[self.value]
@@ -590,23 +610,29 @@ class BiOpExpr(BaseAst):
 
         return getattr(self, self.token.name)(condl, condr)
 
-    def EQ(self, l, r):
+    def EQ(self, l, r): # noqa
         return l == r
 
-    def NEQ(self, l, r):
+    def NEQ(self, l, r): # noqa
         return l != r
 
-    def SEQ(self, l, r):
+    def SEQ(self, l, r): # noqa
         return l <= r
 
-    def GEQ(self, l, r):
+    def GEQ(self, l, r): # noqa
         return l >= r
 
-    def SQ(self, l, r):
+    def SQ(self, l, r): # noqa
         return l < r
 
-    def GQ(self, l, r):
+    def GQ(self, l, r): # noqa
         return l > r
+
+    def And(self, l, r): # noqa
+        return l and r
+
+    def Or(self, l, r): # noqa
+        return l or r
 
 
 class Literal(BaseAst):
@@ -614,7 +640,7 @@ class Literal(BaseAst):
         super().__init__(t, stack)
         try:
             self.value = int(self.value)
-        except:
+        except ValueError:
             pass
 
     def __iadd__(self, other):
@@ -647,28 +673,79 @@ def _name(n: str, args: int = None):
     return inner
 
 @_name("casecount", 1)
-async def builtin_case_count(ctx: ParsingContext, conn: asyncpg.Connection, vbls: PARSE_VARS, args: List[BaseAst]):
-    pass
+async def builtin_case_count(ctx: ParsingContext, conn: asyncpg.Connection, vbls: PARSE_VARS, stack: List[str], args: List[BaseAst]):
+    user = await args[0].access(ctx, vbls, conn)
+    if not isinstance(user, int):
+        stack.append("builtin 'casecount', argument 1")
+        raise ExecutionInterrupt(f"Expected a user id, got {user.__class__.__name__}", stack)
+
+    query = "SELECT COUNT(*) FROM cases WHERE guild_id = $1 AND user_id = $2"
+    return await conn.fetchval(query, ctx.guild.id, user)
+
+link_regex = re.compile(
+    r'https?://(?:(ptb|canary|www)\.)?discord(?:app)?\.com/channels/'
+    r'(?:[0-9]{15,20}|@me)'
+    r'/(?P<channel_id>[0-9]{15,20})/(?P<message_id>[0-9]{15,20})/?$'
+)
 
 @_name("savecase", 5)
-async def builtin_save_case(ctx: ParsingContext, conn: asyncpg.Connection, vbls: PARSE_VARS, args: List[BaseAst]):
-    pass
+async def builtin_save_case(ctx: ParsingContext, conn: asyncpg.Connection, vbls: PARSE_VARS, stack: List[str], args: List[BaseAst]):
+    pargs = [await x.access(ctx, vbls, conn) for x in args]
+    if len(pargs) != 5:
+        stack.append("builtin 'savecase'")
+        raise ExecutionInterrupt(f"Expected exactly 5 arguments, got {len(pargs)}", stack)
+
+    try:
+        assert isinstance(pargs[0], int), (1, f"Expected a user id, got {pargs[0].__class__.__name__}")
+        assert isinstance(pargs[1], int), (2, f"Expected a user id, got {pargs[1].__class__.__name__}")
+        assert isinstance(pargs[2], str), (3, f"Expected a reason (text), got {pargs[2].__class__.__name__}")
+        assert isinstance(pargs[3], str) and link_regex.match(pargs[3]), (4, f"Expected a message link (text)")
+        assert isinstance(pargs[4], str), (5, f"Expected a moderation action (text), got {pargs[4].__class__.__name__}")
+    except AssertionError as e:
+        stack.append(f"builtins 'savecase', argument {e.args[0]}")
+        raise ExecutionInterrupt(e.args[1], stack)
+
+    query = "INSERT INTO cases VALUES ($1, (SELECT MAX(id) FROM cases WHERE guild_id = $1) + 1, $2, $3, $4, $5, $6) RETURNING id"
+    return await conn.fetchval(query, ctx.guild.id, *pargs)
 
 @_name("editcase", 2) # case id, reason, action?
-async def builtin_edit_case(ctx: ParsingContext, conn: asyncpg.Connection, vbls: PARSE_VARS, args: List[BaseAst]):
-    pass
+async def builtin_edit_case(ctx: ParsingContext, conn: asyncpg.Connection, vbls: PARSE_VARS, stack: List[str], args: List[BaseAst]):
+    pargs = [await x.access(ctx, vbls, conn) for x in args]
+    if 2 > len(pargs) > 3:
+        stack.append("builtin 'editcase'")
+        raise ExecutionInterrupt(f"Expected 2-3 arguments, got {len(pargs)}", stack)
 
-@_name("pick", 2)
-async def builtin_random(ctx: ParsingContext, conn: asyncpg.Connection, vbls: PARSE_VARS, args: List[BaseAst]):
-    pass
+    try:
+        assert isinstance(pargs[0], int), (1, f"Expected a user id, got {pargs[0].__class__.__name__}")
+        assert isinstance(pargs[1], str), (2, f"Expected a reason (text), got {pargs[1].__class__.__name__}")
+        if len(pargs) > 2:
+            assert isinstance(pargs[2], str), (3, f"Expected a moderation action (text), got {pargs[2].__class__.__name__}")
+        else:
+            pargs.append(None)
+    except AssertionError as e:
+        stack.append(f"builtins 'editcase', argument {e.args[0]}")
+        raise ExecutionInterrupt(e.args[1], stack)
+
+    query = "UPDATE cases SET reason = $2, action = COALESCE($3, action) WHERE guild_id = $4 AND id = $1 RETURNING id"
+    return await conn.fetchval(query, *pargs, ctx.guild.id) is not None
 
 @_name("usercases", 1)
-async def builtin_random(ctx: ParsingContext, conn: asyncpg.Connection, vbls: PARSE_VARS, args: List[BaseAst]):
-    pass
+async def builtin_user_cases(ctx: ParsingContext, conn: asyncpg.Connection, vbls: PARSE_VARS, stack: List[str], args: List[BaseAst]):
+    user = await args[0].access(ctx, vbls, conn)
+    if not isinstance(user, int):
+        stack.append("builtin 'usercases', argument 1")
+        raise ExecutionInterrupt(f"Expected a user id, got {user.__class__.__name__}", stack)
+
+    query = "SELECT id FROM cases WHERE guild_id = $1 AND user_id = $2"
+    data = await conn.fetch(query, ctx.guild.id, user)
+    return ", ".join((x['id'] for x in data))
+
+@_name("pick", 2)
+async def builtin_random(ctx: ParsingContext, conn: asyncpg.Connection, vbls: PARSE_VARS, _, args: List[BaseAst]):
+    return await random.choice(args).access(ctx, vbls, conn)
 
 @_name("now")
-async def builtin_random(ctx: ParsingContext, conn: asyncpg.Connection, vbls: PARSE_VARS, args: List[BaseAst]):
-    pass
-
+async def builtin_now(*_):
+    return datetime.datetime.utcnow().isoformat()
 
 FROZEN_BUILTINS = set(BUILTINS.keys())

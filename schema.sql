@@ -107,6 +107,16 @@ CREATE TABLE IF NOT EXISTS prefixes
     prefix TEXT NOT NULL,
     PRIMARY KEY (guild_id, prefix)
 );
+CREATE TABLE IF NOT EXISTS cases
+(
+    guild_id BIGINT NOT NULL,
+    id INT NOT NULL,
+    user_id BIGINT NOT NULL,
+    mod_id BIGINT NOT NULL,
+    action TEXT NOT NULL,
+    reason TEXT,
+    link TEXT
+);
 CREATE TABLE IF NOT EXISTS selfroles
 (
     id SERIAL PRIMARY KEY,

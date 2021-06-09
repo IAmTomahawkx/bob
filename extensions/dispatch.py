@@ -59,13 +59,55 @@ class Dispatch(commands.Cog):
 
         self.filled.set()
 
+    async def invalidate_cache_for(self, guild_id: int, conn: asyncpg.Connection):
+        await self.filled.wait()
+        self.filled.clear()
+        if guild_id in self.cached_triggers['configs']:
+            del self.cached_triggers['configs'][guild_id]
+            del self.cached_triggers['events'][guild_id]
+            del self.cached_triggers['automod'][guild_id]
+
+        data = await conn.fetch(
+            """
+            SELECT
+                name, actions, c.guild_id, cfg_id, c.store_messages, c.error_channel
+            FROM events
+            INNER JOIN configs c on c.id = events.cfg_id
+            WHERE c.id = (SELECT MAX(id) FROM configs WHERE configs.guild_id = $1)
+            """,
+            guild_id
+        )
+        self.cached_triggers["configs"][guild_id] = {
+            "id": data[0]["cfg_id"],
+            "store_messages": data[0]["store_messages"],
+            "error_channel": data[0]["error_channel"],
+        }
+        self.cached_triggers["events"][guild_id] = {
+            c["name"]: {"name": c["name"], "actions": c["actions"]} for c in data
+        }
+
+        data = await conn.fetch(
+            """
+            SELECT
+                event, actions, ai.roles as ignore_roles, ai.channels as ignore_channels, c.guild_id
+            FROM automod
+            INNER JOIN automod_ignore ai on automod.id = ai.event_id
+            INNER JOIN configs c on automod.cfg_id = c.id
+            WHERE c.id = (SELECT MAX(id) FROM configs WHERE configs.guild_id = $1)
+            """,
+            guild_id
+        )
+        self.cached_triggers["automod"][guild_id] = {x["event"]: dict(x) for x in data}
+
+        self.filled.set()
+
     async def fire_event_dispatch(
         self, event: dict, guild: discord.Guild, kwargs: Dict[str, Union[str, int, bool]], conn: asyncpg.Connection, message: discord.Message=None
     ):
         ctx = parse.ParsingContext(self.bot, guild, None)
         print(event)
         try:
-            await ctx.run_automod(event, conn, None, kwargs, messageable=message)
+            await ctx.run_automod(event, conn, None, kwargs, messageable=message.channel)
         except parse.ExecutionInterrupt as e:
             g = guild.get_channel(self.cached_triggers["configs"][guild.id]["error_channel"])
             if g:  # drop it silently if it got deleted

@@ -69,6 +69,8 @@ async def parse_guild_config(cfg: str, ctx: Context) -> GuildConfig:
 
     if "event" in parsed:
         config.events = await parse_guild_events(parsed["event"])
+    else:
+        raise ConfigLoadError(f"Due to internal constraints, you must create at least one event")
 
     if "logging" in parsed:
         config.loggers = await parse_guild_logging(ctx, parsed["logging"])

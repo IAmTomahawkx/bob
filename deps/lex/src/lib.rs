@@ -50,6 +50,12 @@ enum Tokenizer {
     #[regex(r"[ \t\n\f]+")]
     Whitespace,
 
+    #[regex(r"(?:\\\||[^'])\|")]
+    Or,
+
+    #[regex(r"(?:\\&'|[^'])&")]
+    And,
+
     #[error]
     ERROR
 }

@@ -3,8 +3,9 @@ import itertools
 import ujson
 from discord.ext import commands
 from utils.bot import Bot
-from utils import extractor, context
+from utils import extractor, context, converters
 from utils.models import *
+from utils.views import Confirmation
 
 
 def setup(bot: Bot):
@@ -223,3 +224,66 @@ class Config(commands.Cog):
                         raise RuntimeError
 
                 await update_msg(success=True)
+
+            dispatcher = self.bot.get_cog("Dispatch")
+            if not dispatcher:
+                return
+
+            await dispatcher.invalidate_cache_for(ctx.guild.id, conn)
+
+    @commands.command("update-config", aliases=['deploy-config'])
+    @commands.has_guild_permissions(administrator=True)
+    async def update_config(self, ctx: context.Context, *, config: converters.ConfigFileConverter = None):
+        if not config and not ctx.message.attachments:
+            return await ctx.reply("You have not provided a configuration file", mention_author=False)
+
+        if config and ctx.message.attachments:
+            return await ctx.reply("Please provide either a file or text, not both", mention_author=False)
+
+        if ctx.message.attachments:
+            try:
+                config = (await ctx.message.attachments[0].read()).decode(encoding="utf8")
+            except: # noqa
+                return await ctx.reply("Could not download the configuration file provided", mention_author=False)
+
+        try:
+            await self.deploy_config(ctx, config)
+        except RuntimeError:
+            pass
+
+    @commands.command("clear-config")
+    @commands.has_guild_permissions(administrator=True)
+    async def clear_config(self, ctx: context.Context):
+        conf = Confirmation()
+        rsp = await ctx.reply("Are you sure you want to completely clear the configuration?", view=conf, mention_author=False)
+        await conf.wait()
+
+        if not conf.response:
+            await rsp.reply("Cancelling", mention_author=False)
+        else:
+            await ctx.trigger_typing()
+            async with self.bot.db.acquire() as conn:
+                rows = await conn.fetch(
+                    "DELETE FROM events "
+                    "WHERE $1 = (SELECT guild_id FROM configs WHERE id = events.cfg_id)"
+                    "RETURNING actions",
+                    ctx.guild.id,
+                )
+                await conn.execute(
+                    "DELETE FROM loggers "
+                    "WHERE $1 = (SELECT guild_id FROM configs WHERE id = loggers.cfg_id)",
+                    ctx.guild.id,
+                )
+
+                await conn.execute(
+                    "UPDATE counters "
+                    "SET deref_until = (NOW() AT TIME ZONE 'utc' + INTERVAL '24 hours') "
+                    "WHERE deref_until IS NULL AND $1 = (SELECT guild_id FROM configs WHERE id = counters.cfg_id)",
+                    ctx.guild.id,
+                )
+
+                await conn.execute(
+                    "DELETE FROM actions WHERE id = ANY($1)", list(itertools.chain(x["actions"] for x in rows))
+                )
+
+            await ctx.send("Successfully cleared configuration")

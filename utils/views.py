@@ -33,3 +33,20 @@ def create_selfrole_view(guild: discord.Guild, models: List[SelfRole]) -> Tuple[
                     self.add_item(b)
 
     return View(), rows
+
+class Confirmation(discord.ui.View):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.response = None
+
+    @discord.ui.button(label="Confirm", style=discord.ButtonStyle.danger)
+    async def confirm(self, btn: discord.ui.Button, inter: discord.Interaction):
+        await inter.response.defer()
+        self.response = True
+        self.stop()
+
+    @discord.ui.button(label="Cancel", style=discord.ButtonStyle.green)
+    async def cancel(self, btn: discord.ui.Button, inter: discord.Interaction):
+        await inter.response.defer()
+        self.response = False
+        self.stop()

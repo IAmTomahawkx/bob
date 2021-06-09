@@ -17,6 +17,7 @@ def boolize(string: str) -> bool:
 
 
 class Context(commands.Context):
+    message: discord.Message
     async def paginate_fields(self, fields, **kwargs):
         pages = paginator.FieldPages(self, entries=fields, **kwargs)
         await pages.paginate()
