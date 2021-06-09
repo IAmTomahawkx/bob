@@ -102,7 +102,12 @@ class Dispatch(commands.Cog):
         self.filled.set()
 
     async def fire_event_dispatch(
-        self, event: dict, guild: discord.Guild, kwargs: Dict[str, Union[str, int, bool]], conn: asyncpg.Connection, message: discord.Message=None
+        self,
+        event: dict,
+        guild: discord.Guild,
+        kwargs: Dict[str, Union[str, int, bool]],
+        conn: asyncpg.Connection,
+        message: discord.Message = None,
     ):
         ctx = parse.ParsingContext(self.bot, guild, None)
         print(event)
@@ -143,7 +148,11 @@ class Dispatch(commands.Cog):
                     [x.proxy_url for x in message.attachments],
                 )
                 await self.fire_event_dispatch(
-                    self.cached_triggers["automod"][message.guild.id]["message"], message.guild, even, conn=conn, message=message # noqa
+                    self.cached_triggers["automod"][message.guild.id]["message"],
+                    message.guild,
+                    even,
+                    conn=conn,
+                    message=message,  # noqa
                 )
 
     @commands.Cog.listener()

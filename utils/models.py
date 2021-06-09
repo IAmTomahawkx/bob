@@ -21,7 +21,7 @@ __all__ = (
     "Automod",
     "AutomodIgnore",
     "GuildConfig",
-    "ReplyAction"
+    "ReplyAction",
 )
 
 
@@ -49,6 +49,7 @@ class ReplyAction(TypedDict):
     reply: str
     condition: Optional[str]
     args: Optional[Dict[str, Union[str, int, bool]]]
+
 
 class CounterAction(TypedDict):
     counter: str
