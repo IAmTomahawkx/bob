@@ -3,3 +3,4 @@ settings.json
 .venv/
 venv/
 target/
+_build/
