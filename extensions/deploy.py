@@ -1,4 +1,5 @@
 import asyncpg
+import discord
 import itertools
 import ujson
 from discord.ext import commands
@@ -157,13 +158,14 @@ class Config(commands.Cog):
                 )
 
                 refed = list(cfg.counters.keys())
-                await conn.execute(
+                derefed = await conn.fetch(
                     "UPDATE counters "
                     "SET deref_until = (NOW() AT TIME ZONE 'utc' + INTERVAL '24 hours') "
-                    "WHERE deref_until IS NULL AND $1 = (SELECT guild_id FROM configs WHERE id = counters.cfg_id) AND name != ANY($2)",
+                    "WHERE deref_until IS NULL AND $1 = (SELECT guild_id FROM configs WHERE id = counters.cfg_id) AND name != ANY($2) RETURNING name",
                     ctx.guild.id,
                     refed,
                 )
+                derefed = {x['name'] for x in derefed}
 
                 await conn.execute(
                     "DELETE FROM actions WHERE id = ANY($1)", list(itertools.chain(x["actions"] for x in rows))
@@ -195,11 +197,15 @@ class Config(commands.Cog):
                 step += 1
                 await update_msg()
 
+                await conn.execute(
+                    "UPDATE counters SET cfg_id = $1 WHERE deref_until IS NOT NULL AND $2 = (select guild_id FROM configs WHERE id = counters.cfg_id)",
+                    new_id, ctx.guild.id
+                )
                 await conn.executemany(
                     "INSERT INTO counters (cfg_id, start, per_user, name, decay_rate, decay_per) VALUES ($1, $2, $3, $4, $5, $6)",
                     [
                         (new_id, x["initial_count"], x["per_user"], x["name"], x["decay_rate"], x["decay_per"])
-                        for x in cfg.counters.values()
+                        for x in cfg.counters.values() if x['name'] not in derefed
                     ],
                 )
 
@@ -260,11 +266,12 @@ class Config(commands.Cog):
     @commands.command("clear-config")
     @commands.has_guild_permissions(administrator=True)
     async def clear_config(self, ctx: context.Context):
-        conf = Confirmation()
-        rsp = await ctx.reply(
+        conf = Confirmation([ctx.author.id])
+        rsp: discord.Message = await ctx.reply(
             "Are you sure you want to completely clear the configuration?", view=conf, mention_author=False
         )
         await conf.wait()
+        await rsp.edit(view=conf)
 
         if not conf.response:
             await rsp.reply("Cancelling", mention_author=False)
@@ -292,5 +299,13 @@ class Config(commands.Cog):
                 await conn.execute(
                     "DELETE FROM actions WHERE id = ANY($1)", list(itertools.chain(x["actions"] for x in rows))
                 )
+
+                await conn.execute(
+                    "DELETE FROM automod WHERE cfg_id = (SELECT guild_id FROM configs WHERE id = automod.cfg_id)"
+                )
+
+            dispatch = self.bot.get_cog("Dispatch")
+            if dispatch:
+                dispatch.remove_cache_for(ctx.guild.id)
 
             await ctx.send("Successfully cleared configuration")

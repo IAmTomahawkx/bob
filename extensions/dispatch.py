@@ -59,6 +59,12 @@ class Dispatch(commands.Cog):
 
         self.filled.set()
 
+    def remove_cache_for(self, guild_id: int):
+        if guild_id in self.cached_triggers["configs"]:
+            del self.cached_triggers["configs"][guild_id]
+            del self.cached_triggers["events"][guild_id]
+            del self.cached_triggers["automod"][guild_id]
+
     async def invalidate_cache_for(self, guild_id: int, conn: asyncpg.Connection):
         await self.filled.wait()
         self.filled.clear()

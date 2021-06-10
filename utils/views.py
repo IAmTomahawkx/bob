@@ -36,18 +36,30 @@ def create_selfrole_view(guild: discord.Guild, models: List[SelfRole]) -> Tuple[
 
 
 class Confirmation(discord.ui.View):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, can_click: List[int], *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.can_click = can_click
         self.response = None
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        return interaction.user.id in self.can_click
 
     @discord.ui.button(label="Confirm", style=discord.ButtonStyle.danger)
     async def confirm(self, btn: discord.ui.Button, inter: discord.Interaction):
         await inter.response.defer()
         self.response = True
+
+        for btn in self.children:
+            btn.disabled = True
+
         self.stop()
 
     @discord.ui.button(label="Cancel", style=discord.ButtonStyle.green)
     async def cancel(self, btn: discord.ui.Button, inter: discord.Interaction):
         await inter.response.defer()
         self.response = False
+
+        for btn in self.children:
+            btn.disabled = True
+
         self.stop()

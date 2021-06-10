@@ -134,8 +134,11 @@ class ParsingContext:
                 if runner["args"]:
                     stack.append(f"'args' values parsing")
                     args.update(
-                        {k.strip("$"): await self.format_fmt(v, conn, stack, args) for k, v in runner["args"].items()}
+                        {k.strip("$"): await self.format_fmt(v, conn, stack, args, True) for k, v in runner["args"].items()}
                     )
+                    stack.pop()
+
+                stack.pop()
 
                 r = await self.run_action(runner, conn, args, stack, i)
                 if r and messageable:
@@ -167,9 +170,12 @@ class ParsingContext:
             args = (vbls and vbls.copy()) or {}
             if act["args"]:
                 stack.append(f"'args' values parsing")
-                args.update({k.strip("$"): await self.format_fmt(v, conn, stack, args) for k, v in act["args"].items()})
+                args.update({k.strip("$"): await self.format_fmt(v, conn, stack, args, True) for k, v in act["args"].items()})
+                stack.pop()
 
-            r = await self.run_action(act, conn, args, stack, i)
+            stack.pop()
+
+            r = await self.run_action(act, conn, args, stack, i, messageable)
             stack.pop()
             if r and messageable:
                 try:
@@ -182,7 +188,7 @@ class ParsingContext:
     ):
         await self.fetch_required_data()
         logger = self.loggers[name]
-        stack.append(f"Logger '{name}' @ event '{event}'")
+        stack.append(f"logger '{name}' @ event '{event}'")
         if event in logger["formats"]:
             fmt = logger["formats"][event]
         elif "_" in logger["formats"]:
@@ -204,17 +210,24 @@ class ParsingContext:
     async def run_command(self, name: str, msg: discord.Message):
         await self.fetch_required_data()
 
-    async def format_fmt(self, fmt: str, conn: asyncpg.Connection, stack: List[str], vbls: PARSE_VARS = None):
+    async def format_fmt(self, fmt: str, conn: asyncpg.Connection, stack: List[str], vbls: PARSE_VARS = None, try_int = False):
         stack.append(f"formatting string '{fmt}'")
         as_ast = await self.parse_input(fmt, stack, strict_errors=False)
         try:
             v = [str(await x.access(self, vbls, conn)) for x in as_ast]
         except ExecutionInterrupt as e:
-            e.msg = e.msg.format(parsable=fmt)
+            e.msg = e.msg.format(input=fmt)
             raise
 
-        resp = "".join(v)
+        resp = "".join(v).strip()
         stack.pop()
+
+        if try_int:
+            try:
+                return int(resp)
+            except ValueError:
+                pass
+
         return resp
 
     async def alter_counter(
@@ -226,7 +239,7 @@ class ParsingContext:
         target: Optional[str] = None,
         vbls: PARSE_VARS = None,
     ):
-        stack.append(f"Edit counter {counter}")
+        stack.append(f"edit counter {counter}")
         if target:
             t = await self.parse_input(target, stack)
             if not t:
@@ -274,17 +287,23 @@ class ParsingContext:
                     )
 
         if cnt["per_user"]:
-            await conn.execute(
+            if not target:
+                raise ExecutionInterrupt(
+                    f"No target given while modifying per-user counter '{counter}'",
+                    stack,
+                )
+            else:
+                await conn.execute(
                 """
                 INSERT INTO counter_values VALUES (
                 $1,
                 ($2::INT + $3::INT),
                 (NOW() AT TIME ZONE 'utc'),
                 $4
-                ) ON CONFLICT (counter_id, user_id) DO UPDATE SET val = counter_values.val::INT + $3::INT
+                ) ON CONFLICT (counter_id, user_id) DO UPDATE SET val = excluded.val + $3::INT
                 """,
                 cnt["id"],
-                cnt["initial_count"],
+                cnt["initial_count"] or 0,
                 modify,
                 target,
             )
@@ -294,14 +313,15 @@ class ParsingContext:
         stack.pop()
 
     async def run_action(
-        self, action: AnyAction, conn: asyncpg.Connection, vbls: Optional[PARSE_VARS], stack: List[str], n: int = None
+        self, action: AnyAction, conn: asyncpg.Connection, vbls: Optional[PARSE_VARS], stack: List[str], n: int = None,
+            messageable=None
     ) -> Optional[str]:
         stack = stack.copy()
         stack.append(f"action #{n} (type: {ActionTypes.reversed[action['type']]})")
 
         if action["type"] == ActionTypes.dispatch:
             if await self.calculate_conditional(action["condition"], stack, vbls, conn):
-                await self.run_event(action["main_text"], conn, stack, vbls)
+                await self.run_event(action["main_text"], conn, stack, vbls, messageable)
 
         elif action["type"] == ActionTypes.log:
             if await self.calculate_conditional(action["condition"], stack, vbls, conn):
@@ -461,7 +481,8 @@ class ParsingContext:
                 except StopIteration:
                     raise ExecutionInterrupt(
                         f"| {parsable}\n| {' '*x.token.start}{'^'*(x.token.end-x.token.start)}\n| "
-                        "Unexpected comparison here (missing something to compare to)",
+                        "Unexpected comparison here: missing something to compare to\n"
+                        fr"| HINT: If you're not trying to compare somemthing, escape the '{x.value}' like this: '\\{x.value}'",
                         stack,
                     )
 
@@ -518,16 +539,17 @@ class CounterAccess(BaseAst):
                 id=data["id"],
             )
 
-            c = await conn.fetchval("SELECT val FROM counter_values WHERE counter_id = $1", counter["id"])
-            if c is None:
-                await conn.execute(
-                    "INSERT INTO counter_values VALUES ($1, $2, (NOW() AT TIME ZONE 'utc'), null)",
-                    counter["id"],
-                    counter["initial_count"],
-                )
-                return counter["initial_count"]
-            else:
-                return c
+            if not counter['per_user']:
+                c = await conn.fetchval("SELECT val FROM counter_values WHERE counter_id = $1", counter["id"])
+                if c is None:
+                    await conn.execute(
+                        "INSERT INTO counter_values VALUES ($1, $2, (NOW() AT TIME ZONE 'utc'), null)",
+                        counter["id"],
+                        counter["initial_count"],
+                    )
+                    return counter["initial_count"]
+                else:
+                    return c
 
         else:
             counter = ctx.counters[self.value]
@@ -549,7 +571,7 @@ class CounterAccess(BaseAst):
                 )
 
             return await conn.fetchval(
-                "",
+                "INSERT INTO counter_values VALUES ($1, $2, (now() at time zone 'utc'), $3) ON CONFLICT (counter_id, user_id) DO UPDATE set val = counter_values.val RETURNING counter_values.val",
                 counter["id"],
                 counter["initial_count"] or 0,
                 d,
@@ -576,7 +598,7 @@ class VariableAccess(BaseAst):
         if self.value in FROZEN_BUILTINS:  # fast lookup
             if len(self.args) < BUILTINS[self.value][1]:
                 raise ExecutionInterrupt(
-                    f"| {{parsable}}\n| {' ' * self.token.start}{'^' * (self.token.end - self.token.start)}\n| "
+                    f"| {{input}}\n| {' ' * self.token.start}{'^' * (self.token.end - self.token.start)}\n| "
                     f"Built in '{self.value}' expected at least {BUILTINS[self.value][1]} arguments, got {len(self.args)}",
                     self.stack,
                 )
@@ -586,7 +608,7 @@ class VariableAccess(BaseAst):
             return vbls[self.value]
 
         raise ExecutionInterrupt(
-            f"| {{parsable}}\n| {' ' * self.token.start}{'^' * (self.token.end - self.token.start)}\n| "
+            f"| {{input}}\n| {' ' * self.token.start}{'^' * (self.token.end - self.token.start)}\n| "
             f"Variable '{self.value}' not found in this context",
             self.stack,
         )
@@ -648,8 +670,10 @@ class BiOpExpr(BaseAst):
 
 
 class Literal(BaseAst):
+    value: Union[str, int]
     def __init__(self, t: arg_lex.Token, stack: List[str]):
         super().__init__(t, stack)
+        self.value = self.value.lstrip("\\")
         try:
             self.value = int(self.value)
         except ValueError:

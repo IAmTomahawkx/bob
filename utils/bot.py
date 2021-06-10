@@ -120,6 +120,13 @@ class Bot(commands.Bot):
     async def on_ready(self):
         print(self.user)
 
+    async def on_command_error(self, context, exception):
+        if isinstance(exception, commands.CheckFailure):
+            return await context.send(exception.args[0])
+
+        else:
+            await super().on_command_error(context, exception)
+
     async def on_message(self, message: discord.Message):
         if message.author.bot:
             return

@@ -22,39 +22,59 @@ enum Tokenizer {
 
     #[token("(")]
     PIn,
+    #[token("\\(")]
+    EPIn,
 
     #[token(")")]
     POut,
+    #[token("\\)")]
+    EPOut,
 
     #[token("==")]
     EQ,
+    #[token("\\==")]
+    EEQ,
 
     #[token("!=")]
     NEQ,
+    #[token("\\!=")]
+    ENEQ,
 
     #[token(">=")]
     GEQ,
+    #[token("\\>=")]
+    EGEQ,
 
     #[token("<=")]
     SEQ,
+    #[token("\\<=")]
+    ESEQ,
 
     #[token("<")]
     SQ,
+    #[token("\\<")]
+    ESQ,
 
     #[token(">")]
     GQ,
+    #[token("\\>")]
+    EGQ,
+
+    #[token("||")]
+    Or,
+    #[token("\\||")]
+    EOr,
+
+    #[token("&&")]
+    And,
+    #[token("\\&&")]
+    EAnd,
 
     #[regex(r"[0-9]+|'(?:\\'|[^'])*'")]
     Literal,
 
     #[regex(r"[ \t\n\f]+")]
     Whitespace,
-
-    #[regex(r"(?:\\\||[^'])\|")]
-    Or,
-
-    #[regex(r"(?:\\&'|[^'])&")]
-    And,
 
     #[error]
     ERROR
@@ -87,6 +107,18 @@ impl Token {
             Tokenizer::SQ => "SQ",
             Tokenizer::GQ => "GQ",
             Tokenizer::Literal => "Literal",
+            Tokenizer::EPIn => "Literal",
+            Tokenizer::EPOut => "Literal",
+            Tokenizer::EEQ => "Literal",
+            Tokenizer::ENEQ => "Literal",
+            Tokenizer::EGEQ => "Literal",
+            Tokenizer::ESEQ => "Literal",
+            Tokenizer::ESQ => "Literal",
+            Tokenizer::EGQ => "Literal",
+            Tokenizer::EOr => "Literal",
+            Tokenizer::EAnd => "Literal",
+            Tokenizer::Or => "Or",
+            Tokenizer::And => "And",
             Tokenizer::Whitespace => "Whitespace",
             Tokenizer::ERROR => "Error"
         }.to_string();
