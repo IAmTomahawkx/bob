@@ -165,7 +165,7 @@ class Config(commands.Cog):
                     ctx.guild.id,
                     refed,
                 )
-                derefed = {x['name'] for x in derefed}
+                derefed = {x["name"] for x in derefed}
 
                 await conn.execute(
                     "DELETE FROM actions WHERE id = ANY($1)", list(itertools.chain(x["actions"] for x in rows))
@@ -199,13 +199,15 @@ class Config(commands.Cog):
 
                 await conn.execute(
                     "UPDATE counters SET cfg_id = $1 WHERE deref_until IS NOT NULL AND $2 = (select guild_id FROM configs WHERE id = counters.cfg_id)",
-                    new_id, ctx.guild.id
+                    new_id,
+                    ctx.guild.id,
                 )
                 await conn.executemany(
                     "INSERT INTO counters (cfg_id, start, per_user, name, decay_rate, decay_per) VALUES ($1, $2, $3, $4, $5, $6)",
                     [
                         (new_id, x["initial_count"], x["per_user"], x["name"], x["decay_rate"], x["decay_per"])
-                        for x in cfg.counters.values() if x['name'] not in derefed
+                        for x in cfg.counters.values()
+                        if x["name"] not in derefed
                     ],
                 )
 
