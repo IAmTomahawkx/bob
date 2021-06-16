@@ -339,9 +339,9 @@ class ParsingContext:
         respond, fn = acts[action['type']]
 
         if respond:
-            return await fn
+            return await fn()
 
-        await fn
+        await fn()
 
     async def calculate_conditional(
         self, condition: Optional[str], stack: List[str], vbls: Optional[PARSE_VARS], conn: asyncpg.Connection
@@ -1035,8 +1035,23 @@ async def builtin_ban(ctx: ParsingContext, conn: asyncpg.Connection, vbls: PARSE
 
     member: discord.Member = ctx.guild.get_member(user) # noqa
 
+    timers = ctx.bot.get_cog("Timers")
+    if not timers and duration:
+        raise ExecutionInterrupt("Failed to schedule the unmute task. This is an internal error that you should not see.", stack)
+
+    tid = None
+    if duration:
+        _data = await timers.schedule_task("mute_complete", duration, conn=conn, guild_id=ctx.guild.id, user_id=user)
+        tid = _data['id']
+
+    # TODO: if someone knows how to do this in one query feel free to do so
+
+    exists = await conn.fetchval("SELECT dispatch_id FROM mutes WHERE guild_id = $1 AND user_id = $2", ctx.guild.id, user)
+    if exists:
+        await timers.cancel_task(exists, conn=conn)
+
     await conn.execute(
-        "INSERT INTO mutes VALUES ($1, $2, $3) ON CONFLICT (guild_id, user_id) DO UPDATE SET expiry = $3", ctx.guild.id, user, duration
+        "INSERT INTO mutes VALUES ($1, $2, $3) ON CONFLICT (guild_id, user_id) DO UPDATE SET dispatch_id = $3", ctx.guild.id, user, tid
     )
 
     caseid = await make_case(ctx, conn, user, "mute", reason or "No reason given", modid=vbls['__callerid__'])

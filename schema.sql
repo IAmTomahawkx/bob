@@ -4,6 +4,13 @@ CREATE TABLE IF NOT EXISTS pages
     long  TEXT NOT NULL UNIQUE,
     url   TEXT NOT NULL UNIQUE
 );
+CREATE TABLE IF NOT EXISTS dispatchers
+(
+    id SERIAL PRIMARY KEY,
+    dispatch_at TIMESTAMP WITHOUT TIME ZONE NOT NULL,
+    event TEXT NOT NULL,
+    data JSONB NOT NULL
+);
 CREATE TABLE IF NOT EXISTS configs
 (
     id SERIAL PRIMARY KEY,
@@ -122,7 +129,7 @@ CREATE TABLE IF NOT EXISTS mutes
     guild_id BIGINT NOT NULL,
     user_id BIGINT NOT NULL,
     PRIMARY KEY (guild_id, user_id),
-    expiry TIMESTAMP WITHOUT TIME ZONE
+    dispatch_id INT
 );
 CREATE TABLE IF NOT EXISTS selfroles
 (
