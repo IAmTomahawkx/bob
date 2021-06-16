@@ -50,9 +50,9 @@ class ParsingContext:
         async with self.bot.db.acquire() as conn:
             query = "SELECT id, error_channel, mute_role FROM configs WHERE guild_id = $1 ORDER BY id DESC LIMIT 1"
             data = await conn.fetchrow(query, self.guild.id)
-            cfg_id = self._cfg_id = data['id']
-            self.error_channel = data['error_channel']
-            self.mute_role = data['mute_role']
+            cfg_id = self._cfg_id = data["id"]
+            self.error_channel = data["error_channel"]
+            self.mute_role = data["mute_role"]
 
             query = """
             SELECT
@@ -343,12 +343,15 @@ class ParsingContext:
         acts = {
             ActionTypes.dispatch: (False, lambda: self.run_event(action["main_text"], conn, stack, vbls, messageable)),
             ActionTypes.log: (False, lambda: self.run_logger(action["main_text"], action["event"], conn, stack, vbls)),
-            ActionTypes.counter: (False, lambda: self.alter_counter(action["main_text"], conn, stack, action["modify"], action["target"], vbls)),
+            ActionTypes.counter: (
+                False,
+                lambda: self.alter_counter(action["main_text"], conn, stack, action["modify"], action["target"], vbls),
+            ),
             ActionTypes.reply: (True, lambda: self.format_fmt(action["main_text"], conn, stack, vbls)),
-            ActionTypes.do: (False, lambda: self.format_fmt(action["main_text"], conn, stack, vbls))
+            ActionTypes.do: (False, lambda: self.format_fmt(action["main_text"], conn, stack, vbls)),
         }
 
-        respond, fn = acts[action['type']]
+        respond, fn = acts[action["type"]]
 
         if respond:
             return await fn()
@@ -487,7 +490,7 @@ class ParsingContext:
             "Error": _error,
             "And": _chained,
             "Or": _chained,
-            "VarSep": _var_sep
+            "VarSep": _var_sep,
         }
         oprs = {"EQ", "NEQ", "SEQ", "GEQ", "SQ", "GQ"}
         for _token in it:
@@ -733,11 +736,10 @@ class BiOpExpr(BaseAst):
     def Or(self, l, r):  # noqa
         return l or r
 
+
 class ChainedBiOpExpr(BaseAst):
-    comps = {
-        "And": lambda l, r: l and r,
-        "Or": lambda l, r: l or r
-    }
+    comps = {"And": lambda l, r: l and r, "Or": lambda l, r: l or r}
+
     def __init__(self, t: arg_lex.Token, stack: List[str]):
         super().__init__(t, stack)
         self.left: Optional[BaseAst] = None
@@ -782,7 +784,10 @@ class Whitespace(BaseAst):
 
 # builtins and stuff
 
-async def resolve_channel(ctx: ParsingContext, arg: BaseAst, vbls: PARSE_VARS, conn: asyncpg.Connection, stack: List[str]) -> discord.TextChannel:
+
+async def resolve_channel(
+    ctx: ParsingContext, arg: BaseAst, vbls: PARSE_VARS, conn: asyncpg.Connection, stack: List[str]
+) -> discord.TextChannel:
     data = await arg.access(ctx, vbls, conn)
     if isinstance(data, int):
         if not any(x.id == arg and isinstance(x, discord.TextChannel) for x in ctx.guild.channels):
@@ -803,6 +808,7 @@ async def resolve_channel(ctx: ParsingContext, arg: BaseAst, vbls: PARSE_VARS, c
         )
 
     return channels[0]
+
 
 BUILTINS = dict()
 
@@ -911,15 +917,21 @@ async def builtin_random(ctx: ParsingContext, conn: asyncpg.Connection, vbls: PA
 async def builtin_now(*_):
     return datetime.datetime.utcnow().isoformat()
 
+
 @_name("send", 2)
-async def builtin_send(ctx: ParsingContext, conn: asyncpg.Connection, vbls: PARSE_VARS, stack: List[str], args: List[BaseAst]):
+async def builtin_send(
+    ctx: ParsingContext, conn: asyncpg.Connection, vbls: PARSE_VARS, stack: List[str], args: List[BaseAst]
+):
     chnl = await resolve_channel(ctx, args[0], vbls, conn, stack)
     try:
         await chnl.send(str(await args[1].access(ctx, vbls, conn)))
     except discord.HTTPException as e:
         raise ExecutionInterrupt(e.args[0], stack)
 
-async def make_case(ctx: ParsingContext, conn: asyncpg.Connection, userid: int, action: str, reason: str, modid: int = None):
+
+async def make_case(
+    ctx: ParsingContext, conn: asyncpg.Connection, userid: int, action: str, reason: str, modid: int = None
+):
     modid = modid or ctx.bot.user.id
     query = """
     INSERT INTO
@@ -931,8 +943,11 @@ async def make_case(ctx: ParsingContext, conn: asyncpg.Connection, userid: int, 
     """
     return await conn.fetchval(query, ctx.guild.id, userid, modid, action, reason)
 
+
 @_name("kick", 1)
-async def builtin_kick(ctx: ParsingContext, conn: asyncpg.Connection, vbls: PARSE_VARS, stack: List[str], args: List[BaseAst]):
+async def builtin_kick(
+    ctx: ParsingContext, conn: asyncpg.Connection, vbls: PARSE_VARS, stack: List[str], args: List[BaseAst]
+):
     user = await args[0].access(ctx, vbls, conn)
     if not isinstance(user, int):
         raise ExecutionInterrupt(f"Expected a user id, got {user.__class__.__name__}", stack)
@@ -955,27 +970,30 @@ async def builtin_kick(ctx: ParsingContext, conn: asyncpg.Connection, vbls: PARS
         else:
             return f"Cannot kick user with id {user}:\n{e.args[0]}"
 
-    caseid = await make_case(ctx, conn, user, "kick", reason or "No reason given", modid=vbls['__callerid__'])
+    caseid = await make_case(ctx, conn, user, "kick", reason or "No reason given", modid=vbls["__callerid__"])
 
     if "case" in ctx.events:
         mutated = vbls.copy()
-        mutated['caseid'] = caseid
-        mutated['casereason'] = reason or "No reason given"
-        mutated['caseaction'] = "kick"
-        mutated['casemodid'] = vbls['__callerid__']
-        mutated['casemodname'] = str(ctx.guild.get_member(vbls['__callerid__']))
-        mutated['caseuserid'] = user
-        mutated['caseusername'] = name
+        mutated["caseid"] = caseid
+        mutated["casereason"] = reason or "No reason given"
+        mutated["caseaction"] = "kick"
+        mutated["casemodid"] = vbls["__callerid__"]
+        mutated["casemodname"] = str(ctx.guild.get_member(vbls["__callerid__"]))
+        mutated["caseuserid"] = user
+        mutated["caseusername"] = name
 
         await ctx.run_event("case", conn, stack, mutated)
 
     if name:
         return f"kicked <@!{user}>"
     else:
-        return f"kicked user with id {user}"\
+        return f"kicked user with id {user}"
+
 
 @_name("ban", 1)
-async def builtin_ban(ctx: ParsingContext, conn: asyncpg.Connection, vbls: PARSE_VARS, stack: List[str], args: List[BaseAst]):
+async def builtin_ban(
+    ctx: ParsingContext, conn: asyncpg.Connection, vbls: PARSE_VARS, stack: List[str], args: List[BaseAst]
+):
     user = await args[0].access(ctx, vbls, conn)
     user = await args[0].access(ctx, vbls, conn)
     if not isinstance(user, int):
@@ -999,17 +1017,17 @@ async def builtin_ban(ctx: ParsingContext, conn: asyncpg.Connection, vbls: PARSE
         else:
             return f"cannot ban user with id {user}:\n{e.args[0]}"
 
-    caseid = await make_case(ctx, conn, user, "ban", reason or "No reason given", modid=vbls['__callerid__'])
+    caseid = await make_case(ctx, conn, user, "ban", reason or "No reason given", modid=vbls["__callerid__"])
 
     if "case" in ctx.events:
         mutated = vbls.copy()
-        mutated['caseid'] = caseid
-        mutated['casereason'] = reason or "No reason given"
-        mutated['caseaction'] = "ban"
-        mutated['casemodid'] = vbls['__callerid__']
-        mutated['casemodname'] = str(ctx.guild.get_member(vbls['__callerid__']))
-        mutated['caseuserid'] = user
-        mutated['caseusername'] = name
+        mutated["caseid"] = caseid
+        mutated["casereason"] = reason or "No reason given"
+        mutated["caseaction"] = "ban"
+        mutated["casemodid"] = vbls["__callerid__"]
+        mutated["casemodname"] = str(ctx.guild.get_member(vbls["__callerid__"]))
+        mutated["caseuserid"] = user
+        mutated["caseusername"] = name
 
         await ctx.run_event("case", conn, stack, mutated)
 
@@ -1018,8 +1036,11 @@ async def builtin_ban(ctx: ParsingContext, conn: asyncpg.Connection, vbls: PARSE
     else:
         return f"banned user with id {user}"
 
+
 @_name("mute", 1)
-async def builtin_ban(ctx: ParsingContext, conn: asyncpg.Connection, vbls: PARSE_VARS, stack: List[str], args: List[BaseAst]):
+async def builtin_ban(
+    ctx: ParsingContext, conn: asyncpg.Connection, vbls: PARSE_VARS, stack: List[str], args: List[BaseAst]
+):
     user = await args[0].access(ctx, vbls, conn)
     if not isinstance(user, int):
         raise ExecutionInterrupt(f"Expected a user id, got {user.__class__.__name__}", stack)
@@ -1046,39 +1067,46 @@ async def builtin_ban(ctx: ParsingContext, conn: asyncpg.Connection, vbls: PARSE
     if mute_role.position >= ctx.guild.me.top_role.position:
         raise ExecutionInterrupt("The configured mute role has been moved above the bots highest role", stack)
 
-    member: discord.Member = ctx.guild.get_member(user) # noqa
+    member: discord.Member = ctx.guild.get_member(user)  # noqa
 
     timers = ctx.bot.get_cog("Timers")
     if not timers and duration:
-        raise ExecutionInterrupt("Failed to schedule the unmute task. This is an internal error that you should not see.", stack)
+        raise ExecutionInterrupt(
+            "Failed to schedule the unmute task. This is an internal error that you should not see.", stack
+        )
 
     tid = None
     if duration:
         _data = await timers.schedule_task("mute_complete", duration, conn=conn, guild_id=ctx.guild.id, user_id=user)
-        tid = _data['id']
+        tid = _data["id"]
 
     # TODO: if someone knows how to do this in one query feel free to do so
 
-    exists = await conn.fetchval("SELECT dispatch_id FROM mutes WHERE guild_id = $1 AND user_id = $2", ctx.guild.id, user)
+    exists = await conn.fetchval(
+        "SELECT dispatch_id FROM mutes WHERE guild_id = $1 AND user_id = $2", ctx.guild.id, user
+    )
     if exists:
         await timers.cancel_task(exists, conn=conn)
 
     await conn.execute(
-        "INSERT INTO mutes VALUES ($1, $2, $3) ON CONFLICT (guild_id, user_id) DO UPDATE SET dispatch_id = $3", ctx.guild.id, user, tid
+        "INSERT INTO mutes VALUES ($1, $2, $3) ON CONFLICT (guild_id, user_id) DO UPDATE SET dispatch_id = $3",
+        ctx.guild.id,
+        user,
+        tid,
     )
 
-    caseid = await make_case(ctx, conn, user, "mute", reason or "No reason given", modid=vbls['__callerid__'])
+    caseid = await make_case(ctx, conn, user, "mute", reason or "No reason given", modid=vbls["__callerid__"])
 
     if "case" in ctx.events:
         mutated = vbls.copy()
-        mutated['caseid'] = caseid
-        mutated['casereason'] = reason or "No reason given"
-        mutated['caseaction'] = "mute" if member else "forcemute"
-        mutated['casemodid'] = vbls['__callerid__']
-        mutated['casemodname'] = str(ctx.guild.get_member(vbls['__callerid__']))
-        mutated['caseuserid'] = user
-        mutated['caseusername'] = member and str(member)
-        mutated['muteexpires'] = "indefinitely" if not duration else f"until {duration.isoformat()}"
+        mutated["caseid"] = caseid
+        mutated["casereason"] = reason or "No reason given"
+        mutated["caseaction"] = "mute" if member else "forcemute"
+        mutated["casemodid"] = vbls["__callerid__"]
+        mutated["casemodname"] = str(ctx.guild.get_member(vbls["__callerid__"]))
+        mutated["caseuserid"] = user
+        mutated["caseusername"] = member and str(member)
+        mutated["muteexpires"] = "indefinitely" if not duration else f"until {duration.isoformat()}"
 
         await ctx.run_event("case", conn, stack, mutated)
 
@@ -1089,5 +1117,6 @@ async def builtin_ban(ctx: ParsingContext, conn: asyncpg.Connection, vbls: PARSE
             return f"cannot mute <@!{user}>:\n{e.args[0]}"
 
     return f"muted {member}{f' until {duration.isoformat()}' if duration else ''}"
+
 
 FROZEN_BUILTINS = set(BUILTINS.keys())
