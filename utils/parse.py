@@ -140,7 +140,10 @@ class ParsingContext:
                 if runner["args"]:
                     stack.append(f"'args' values parsing")
                     args.update(
-                        {k.strip("$"): await self.format_fmt(v, conn, stack, args, True) for k, v in runner["args"].items()}
+                        {
+                            k.strip("$"): await self.format_fmt(v, conn, stack, args, True)
+                            for k, v in runner["args"].items()
+                        }
                     )
                     stack.pop()
 
@@ -176,7 +179,9 @@ class ParsingContext:
             args = (vbls and vbls.copy()) or {}
             if act["args"]:
                 stack.append(f"'args' values parsing")
-                args.update({k.strip("$"): await self.format_fmt(v, conn, stack, args, True) for k, v in act["args"].items()})
+                args.update(
+                    {k.strip("$"): await self.format_fmt(v, conn, stack, args, True) for k, v in act["args"].items()}
+                )
                 stack.pop()
 
             stack.pop()
@@ -216,7 +221,9 @@ class ParsingContext:
     async def run_command(self, name: str, msg: discord.Message):
         await self.fetch_required_data()
 
-    async def format_fmt(self, fmt: str, conn: asyncpg.Connection, stack: List[str], vbls: PARSE_VARS = None, try_int = False):
+    async def format_fmt(
+        self, fmt: str, conn: asyncpg.Connection, stack: List[str], vbls: PARSE_VARS = None, try_int=False
+    ):
         stack.append(f"formatting string '{fmt}'")
         as_ast = await self.parse_input(fmt, stack, strict_errors=False)
         try:
@@ -300,7 +307,7 @@ class ParsingContext:
                 )
             else:
                 await conn.execute(
-                """
+                    """
                 INSERT INTO counter_values VALUES (
                 $1,
                 ($2::INT + $3::INT),
@@ -308,19 +315,24 @@ class ParsingContext:
                 $4
                 ) ON CONFLICT (counter_id, user_id) DO UPDATE SET val = excluded.val + $3::INT
                 """,
-                cnt["id"],
-                cnt["initial_count"] or 0,
-                modify,
-                target,
-            )
+                    cnt["id"],
+                    cnt["initial_count"] or 0,
+                    modify,
+                    target,
+                )
         else:
             await conn.execute("UPDATE counter_values SET val = val + $1 WHERE counter_id = $2", modify, cnt["id"])
 
         stack.pop()
 
     async def run_action(
-        self, action: AnyAction, conn: asyncpg.Connection, vbls: Optional[PARSE_VARS], stack: List[str], n: int = None,
-            messageable=None
+        self,
+        action: AnyAction,
+        conn: asyncpg.Connection,
+        vbls: Optional[PARSE_VARS],
+        stack: List[str],
+        n: int = None,
+        messageable=None,
     ) -> Optional[str]:
         stack = stack.copy()
         stack.append(f"action #{n} (type: {ActionTypes.reversed[action['type']]})")
@@ -592,7 +604,7 @@ class CounterAccess(BaseAst):
                 id=data["id"],
             )
 
-            if not counter['per_user']:
+            if not counter["per_user"]:
                 c = await conn.fetchval("SELECT val FROM counter_values WHERE counter_id = $1", counter["id"])
                 if c is None:
                     await conn.execute(
@@ -743,6 +755,7 @@ class ChainedBiOpExpr(BaseAst):
 
 class Literal(BaseAst):
     value: Union[str, int]
+
     def __init__(self, t: arg_lex.Token, stack: List[str]):
         super().__init__(t, stack)
         self.value = self.value.lstrip("\\").strip("'")
