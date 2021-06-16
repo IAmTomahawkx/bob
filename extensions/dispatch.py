@@ -115,8 +115,10 @@ class Dispatch(commands.Cog):
         conn: asyncpg.Connection,
         message: discord.Message = None,
     ):
-        ctx = parse.ParsingContext(self.bot, guild, None)
+        ctx = parse.ParsingContext(self.bot, guild)
         print(event)
+        kwargs['__callerid__'] = self.bot.user.id
+
         try:
             await ctx.run_automod(event, conn, None, kwargs, messageable=message.channel)
         except parse.ExecutionInterrupt as e:

@@ -7,9 +7,11 @@ import random
 import asyncpg
 import discord
 import ujson
+from discord.ext import commands
 from .models import *
 from deps import arg_lex
 from .bot import Bot
+from .time import ShortTime
 
 PARSE_VARS = Optional[Dict[str, Union[str, int, bool]]]
 
@@ -26,12 +28,13 @@ class ExecutionInterrupt(Exception):
 
 
 class ParsingContext:
-    def __init__(self, bot: Bot, guild: discord.Guild, invoker: Optional[discord.Member], is_dummy=False):
+    def __init__(self, bot: Bot, guild: discord.Guild, is_dummy=False):
         self.bot = bot
         self.dummy = is_dummy
         self.guild = guild
-        self.invoker = invoker
         self._cfg_id: Optional[int] = None
+        self.error_channel: Optional[int] = None
+        self.mute_role: Optional[int] = None
         self.events = {}
         self.loggers = {}
         self.counters = {}  # lazy filled, don't assume the counter is in this
@@ -45,8 +48,11 @@ class ParsingContext:
             return
 
         async with self.bot.db.acquire() as conn:
-            query = "SELECT id FROM configs WHERE guild_id = $1 ORDER BY id DESC LIMIT 1"
-            cfg_id = self._cfg_id = await conn.fetchval(query, self.guild.id)
+            query = "SELECT id, error_channel, mute_role FROM configs WHERE guild_id = $1 ORDER BY id DESC LIMIT 1"
+            data = await conn.fetchrow(query, self.guild.id)
+            cfg_id = self._cfg_id = data['id']
+            self.error_channel = data['error_channel']
+            self.mute_role = data['mute_role']
 
             query = """
             SELECT
@@ -319,21 +325,23 @@ class ParsingContext:
         stack = stack.copy()
         stack.append(f"action #{n} (type: {ActionTypes.reversed[action['type']]})")
 
-        if action["type"] == ActionTypes.dispatch:
-            if await self.calculate_conditional(action["condition"], stack, vbls, conn):
-                await self.run_event(action["main_text"], conn, stack, vbls, messageable)
+        if not await self.calculate_conditional(action["condition"], stack, vbls, conn):
+            return
 
-        elif action["type"] == ActionTypes.log:
-            if await self.calculate_conditional(action["condition"], stack, vbls, conn):
-                await self.run_logger(action["main_text"], action["event"], conn, stack, vbls)
+        acts = {
+            ActionTypes.dispatch: (False, lambda: self.run_event(action["main_text"], conn, stack, vbls, messageable)),
+            ActionTypes.log: (False, lambda: self.run_logger(action["main_text"], action["event"], conn, stack, vbls)),
+            ActionTypes.counter: (False, lambda: self.alter_counter(action["main_text"], conn, stack, action["modify"], action["target"], vbls)),
+            ActionTypes.reply: (True, lambda: self.format_fmt(action["main_text"], conn, stack, vbls)),
+            ActionTypes.do: (False, lambda: self.format_fmt(action["main_text"], conn, stack, vbls))
+        }
 
-        elif action["type"] == ActionTypes.counter:
-            if await self.calculate_conditional(action["condition"], stack, vbls, conn):
-                await self.alter_counter(action["main_text"], conn, stack, action["modify"], action["target"], vbls)
+        respond, fn = acts[action['type']]
 
-        elif action["type"] == ActionTypes.reply:
-            if await self.calculate_conditional(action["condition"], stack, vbls, conn):
-                return await self.format_fmt(action["main_text"], conn, stack, vbls)
+        if respond:
+            return await fn
+
+        await fn
 
     async def calculate_conditional(
         self, condition: Optional[str], stack: List[str], vbls: Optional[PARSE_VARS], conn: asyncpg.Connection
@@ -344,7 +352,7 @@ class ParsingContext:
         stack.append("<conditional>")
 
         data = await self.parse_input(condition, stack)
-        if not data or len(data) != 1 or not isinstance(data[0], BiOpExpr):
+        if not data or len(data) != 1 or not isinstance(data[0], (BiOpExpr, ChainedBiOpExpr)):
             raise ExecutionInterrupt("Expected a comparison", stack)
 
         try:
@@ -358,7 +366,7 @@ class ParsingContext:
 
     async def parse_input(self, parsable: str, stack: List[str], strict_errors=True) -> List[BaseAst]:
         tokens = arg_lex.run_lex(parsable)
-        output: List[Union[BiOpExpr, CounterAccess, VariableAccess, Literal]] = []
+        output: List[Union[BiOpExpr, ChainedBiOpExpr, CounterAccess, VariableAccess, Literal]] = []
         depth: List[Union[CounterAccess, VariableAccess, Literal]] = []  # noqa
         last = None
 
@@ -444,6 +452,19 @@ class ParsingContext:
             else:
                 output.append(last)
 
+        def _chained(token):
+            nonlocal depth, last
+            last = ChainedBiOpExpr(token, stack)
+            if depth:
+                depth[-1].args.append(last)
+            else:
+                output.append(last)
+
+        def _var_sep(token):
+            nonlocal depth, last
+            if not depth:
+                _error(token)
+
         typs = {
             "Whitespace": _whitespace,
             "Var": _var,
@@ -452,8 +473,11 @@ class ParsingContext:
             "PIn": _pin,
             "Literal": _literal,
             "Error": _error,
+            "And": _chained,
+            "Or": _chained,
+            "VarSep": _var_sep
         }
-        oprs = {"EQ", "NEQ", "SEQ", "GEQ", "SQ", "GQ", "And", "Or"}
+        oprs = {"EQ", "NEQ", "SEQ", "GEQ", "SQ", "GQ"}
         for _token in it:
             t = typs.get(_token.name)
             if t:
@@ -482,15 +506,44 @@ class ParsingContext:
                     raise ExecutionInterrupt(
                         f"| {parsable}\n| {' '*x.token.start}{'^'*(x.token.end-x.token.start)}\n| "
                         "Unexpected comparison here: missing something to compare to\n"
-                        fr"| HINT: If you're not trying to compare somemthing, escape the '{x.value}' like this: '\\{x.value}'",
+                        fr"| HINT: If you're not trying to compare something, escape the '{x.value}' like this: '\\{x.value}'",
                         stack,
                     )
 
                 true_output.append(x)
                 continue
 
-            elif isinstance(x, (CounterAccess, VariableAccess, Literal)):
+            elif isinstance(x, (CounterAccess, VariableAccess, Literal, ChainedBiOpExpr)):
                 true_output.append(x)
+
+        output = true_output
+        true_output = []
+        it = iter(enumerate(output))
+
+        # for those wondering, i do two loops here because i need to collect all the BiOpExprs before i can collect the ChainedBiOpExprs
+        for i, x in it:
+            if isinstance(x, ChainedBiOpExpr):
+                if not true_output:
+                    raise ExecutionInterrupt(
+                        f"| {parsable}\n| {' '*x.token.start}{'^'*(x.token.end-x.token.start)}\n| Unexpected '{x.value}' here",
+                        stack,
+                    )
+
+                x.left = true_output.pop()
+                try:
+                    x.right = next(it)[1]  # noqa
+                except StopIteration:
+                    raise ExecutionInterrupt(
+                        f"| {parsable}\n| {' '*x.token.start}{'^'*(x.token.end-x.token.start)}\n| "
+                        "Unexpected chained comparison here: missing something a comparison on the right side\n"
+                        fr"| HINT: If you're not trying to chain something, escape the '{x.value}' like this: '\\{x.value}'",
+                        stack,
+                    )
+
+                true_output.append(x)
+                continue
+
+            true_output.append(x)
 
         return true_output
 
@@ -602,7 +655,7 @@ class VariableAccess(BaseAst):
                     f"Built in '{self.value}' expected at least {BUILTINS[self.value][1]} arguments, got {len(self.args)}",
                     self.stack,
                 )
-            return await BUILTINS[self.value][0](ctx, conn, vbls, self.args)
+            return await BUILTINS[self.value][0](ctx, conn, vbls, self.stack, self.args)
 
         if vbls and self.value in vbls:  # potentially slow lookup
             return vbls[self.value]
@@ -668,12 +721,31 @@ class BiOpExpr(BaseAst):
     def Or(self, l, r):  # noqa
         return l or r
 
+class ChainedBiOpExpr(BaseAst):
+    comps = {
+        "And": lambda l, r: l and r,
+        "Or": lambda l, r: l or r
+    }
+    def __init__(self, t: arg_lex.Token, stack: List[str]):
+        super().__init__(t, stack)
+        self.left: Optional[BaseAst] = None
+        self.right: Optional[BaseAst] = None
+
+    def __repr__(self):
+        return f"<ChainedBiOpExpr {self.value} left{self.left} right={self.right}>"
+
+    async def access(self, ctx: ParsingContext, vbls: Optional[PARSE_VARS], conn: asyncpg.Connection) -> bool:
+        condl = await self.left.access(ctx, vbls, conn)
+        condr = await self.right.access(ctx, vbls, conn)
+
+        return self.comps[self.token.name](condl, condr)
+
 
 class Literal(BaseAst):
     value: Union[str, int]
     def __init__(self, t: arg_lex.Token, stack: List[str]):
         super().__init__(t, stack)
-        self.value = self.value.lstrip("\\")
+        self.value = self.value.lstrip("\\").strip("'")
         try:
             self.value = int(self.value)
         except ValueError:
@@ -696,6 +768,28 @@ class Whitespace(BaseAst):
 
 
 # builtins and stuff
+
+async def resolve_channel(ctx: ParsingContext, arg: BaseAst, vbls: PARSE_VARS, conn: asyncpg.Connection, stack: List[str]) -> discord.TextChannel:
+    data = await arg.access(ctx, vbls, conn)
+    if isinstance(data, int):
+        if not any(x.id == arg and isinstance(x, discord.TextChannel) for x in ctx.guild.channels):
+            raise ExecutionInterrupt(f"The referenced channel, {data}, is invalid (not found).", stack)
+
+        return ctx.guild.get_channel(data)
+
+    _arg = data.lstrip("#").lower()
+    channels = tuple(x for x in ctx.guild.channels if x.name.lower() == _arg and isinstance(x, discord.TextChannel))
+    if not channels:
+        raise ExecutionInterrupt(f"The referenced channel, {data}, is invalid (not found).", stack)
+
+    if len(channels) > 1:
+        raise ExecutionInterrupt(
+            f"| {{input}}\n| {' ' * arg.token.start}{'^' * (arg.token.end - arg.token.start)}\n| "
+            f"There are multiple channels named '{_arg}'. Refusing to infer the correct one",
+            arg.stack,
+        )
+
+    return channels[0]
 
 BUILTINS = dict()
 
@@ -804,5 +898,168 @@ async def builtin_random(ctx: ParsingContext, conn: asyncpg.Connection, vbls: PA
 async def builtin_now(*_):
     return datetime.datetime.utcnow().isoformat()
 
+@_name("send", 2)
+async def builtin_send(ctx: ParsingContext, conn: asyncpg.Connection, vbls: PARSE_VARS, stack: List[str], args: List[BaseAst]):
+    chnl = await resolve_channel(ctx, args[0], vbls, conn, stack)
+    try:
+        await chnl.send(str(await args[1].access(ctx, vbls, conn)))
+    except discord.HTTPException as e:
+        raise ExecutionInterrupt(e.args[0], stack)
+
+async def make_case(ctx: ParsingContext, conn: asyncpg.Connection, userid: int, action: str, reason: str, modid: int = None):
+    modid = modid or ctx.bot.user.id
+    query = """
+    INSERT INTO
+        cases
+        (guild_id, id, user_id, mod_id, action, reason)
+    VALUES 
+        ($1, (SELECT COUNT(*) + 1 FROM cases WHERE guild_id = $1), $2, $3, $4, $5)
+    RETURNING id
+    """
+    return await conn.fetchval(query, ctx.guild.id, userid, modid, action, reason)
+
+@_name("kick", 1)
+async def builtin_kick(ctx: ParsingContext, conn: asyncpg.Connection, vbls: PARSE_VARS, stack: List[str], args: List[BaseAst]):
+    user = await args[0].access(ctx, vbls, conn)
+    if not isinstance(user, int):
+        raise ExecutionInterrupt(f"Expected a user id, got {user.__class__.__name__}", stack)
+
+    reason = None
+
+    if len(args) > 1:
+        reason = str(await args[1].access(ctx, vbls, conn))
+
+    name = None
+    _exs = ctx.guild.get_member(user)
+    if _exs:
+        name = str(_exs)
+
+    try:
+        await ctx.guild.kick(discord.Object(id=user), reason=reason)
+    except discord.HTTPException as e:
+        if name:
+            return f"Cannot kick <@!{user}>:\n{e.args[0]}"
+        else:
+            return f"Cannot kick user with id {user}:\n{e.args[0]}"
+
+    caseid = await make_case(ctx, conn, user, "kick", reason or "No reason given", modid=vbls['__callerid__'])
+
+    if "case" in ctx.events:
+        mutated = vbls.copy()
+        mutated['caseid'] = caseid
+        mutated['casereason'] = reason or "No reason given"
+        mutated['caseaction'] = "kick"
+        mutated['casemodid'] = vbls['__callerid__']
+        mutated['casemodname'] = str(ctx.guild.get_member(vbls['__callerid__']))
+        mutated['caseuserid'] = user
+        mutated['caseusername'] = name
+
+        await ctx.run_event("case", conn, stack, mutated)
+
+    if name:
+        return f"kicked <@!{user}>"
+    else:
+        return f"kicked user with id {user}"\
+
+@_name("ban", 1)
+async def builtin_ban(ctx: ParsingContext, conn: asyncpg.Connection, vbls: PARSE_VARS, stack: List[str], args: List[BaseAst]):
+    user = await args[0].access(ctx, vbls, conn)
+    user = await args[0].access(ctx, vbls, conn)
+    if not isinstance(user, int):
+        raise ExecutionInterrupt(f"Expected a user id, got {user.__class__.__name__}", stack)
+
+    reason = None
+
+    if len(args) > 1:
+        reason = str(await args[1].access(ctx, vbls, conn))
+
+    name = None
+    _exs = ctx.guild.get_member(user)
+    if _exs:
+        name = str(_exs)
+
+    try:
+        await ctx.guild.ban(discord.Object(id=user), reason=reason)
+    except discord.HTTPException as e:
+        if name:
+            return f"cannot ban <@!{user}>:\n{e.args[0]}"
+        else:
+            return f"cannot ban user with id {user}:\n{e.args[0]}"
+
+    caseid = await make_case(ctx, conn, user, "ban", reason or "No reason given", modid=vbls['__callerid__'])
+
+    if "case" in ctx.events:
+        mutated = vbls.copy()
+        mutated['caseid'] = caseid
+        mutated['casereason'] = reason or "No reason given"
+        mutated['caseaction'] = "ban"
+        mutated['casemodid'] = vbls['__callerid__']
+        mutated['casemodname'] = str(ctx.guild.get_member(vbls['__callerid__']))
+        mutated['caseuserid'] = user
+        mutated['caseusername'] = name
+
+        await ctx.run_event("case", conn, stack, mutated)
+
+    if name:
+        return f"banned <@!{user}>"
+    else:
+        return f"banned user with id {user}"
+
+@_name("mute", 1)
+async def builtin_ban(ctx: ParsingContext, conn: asyncpg.Connection, vbls: PARSE_VARS, stack: List[str], args: List[BaseAst]):
+    user = await args[0].access(ctx, vbls, conn)
+    if not isinstance(user, int):
+        raise ExecutionInterrupt(f"Expected a user id, got {user.__class__.__name__}", stack)
+
+    _arglen = len(args)
+    reason = duration = None
+
+    if _arglen > 2:
+        reason = str(await args[1].access(ctx, vbls, conn))
+        duration = str(await args[2].access(ctx, vbls, conn))
+        try:
+            duration = ShortTime(duration).dt
+        except commands.BadArgument as e:
+            return f"The duration ('{duration}') is invalid: {e.args[0]}"
+
+    elif _arglen > 1:
+        reason = str(await args[1].access(ctx, vbls, conn))
+
+    mute_role: discord.Role = ctx.mute_role is not None and ctx.guild.get_role(ctx.mute_role)
+
+    if not mute_role:
+        raise ExecutionInterrupt("The configured mute role has been deleted", stack)
+
+    if mute_role.position >= ctx.guild.me.top_role.position:
+        raise ExecutionInterrupt("The configured mute role has been moved above the bots highest role", stack)
+
+    member: discord.Member = ctx.guild.get_member(user) # noqa
+
+    await conn.execute(
+        "INSERT INTO mutes VALUES ($1, $2, $3) ON CONFLICT (guild_id, user_id) DO UPDATE SET expiry = $3", ctx.guild.id, user, duration
+    )
+
+    caseid = await make_case(ctx, conn, user, "mute", reason or "No reason given", modid=vbls['__callerid__'])
+
+    if "case" in ctx.events:
+        mutated = vbls.copy()
+        mutated['caseid'] = caseid
+        mutated['casereason'] = reason or "No reason given"
+        mutated['caseaction'] = "mute" if member else "forcemute"
+        mutated['casemodid'] = vbls['__callerid__']
+        mutated['casemodname'] = str(ctx.guild.get_member(vbls['__callerid__']))
+        mutated['caseuserid'] = user
+        mutated['caseusername'] = member and str(member)
+        mutated['muteexpires'] = "indefinitely" if not duration else f"until {duration.isoformat()}"
+
+        await ctx.run_event("case", conn, stack, mutated)
+
+    if member:
+        try:
+            await member.add_roles(mute_role)
+        except discord.HTTPException as e:
+            return f"cannot mute <@!{user}>:\n{e.args[0]}"
+
+    return f"muted {member}{f' until {duration.isoformat()}' if duration else ''}"
 
 FROZEN_BUILTINS = set(BUILTINS.keys())

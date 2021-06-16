@@ -117,6 +117,13 @@ CREATE TABLE IF NOT EXISTS cases
     reason TEXT,
     link TEXT
 );
+CREATE TABLE IF NOT EXISTS mutes
+(
+    guild_id BIGINT NOT NULL,
+    user_id BIGINT NOT NULL,
+    PRIMARY KEY (guild_id, user_id),
+    expiry TIMESTAMP WITHOUT TIME ZONE
+);
 CREATE TABLE IF NOT EXISTS selfroles
 (
     id SERIAL PRIMARY KEY,

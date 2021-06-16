@@ -76,6 +76,9 @@ enum Tokenizer {
     #[regex(r"[ \t\n\f]+")]
     Whitespace,
 
+    #[token(",")]
+    VarSep,
+
     #[error]
     ERROR
 }
@@ -106,6 +109,7 @@ impl Token {
             Tokenizer::SEQ => "SEQ",
             Tokenizer::SQ => "SQ",
             Tokenizer::GQ => "GQ",
+            Tokenizer::VarSep => "VarSep",
             Tokenizer::Literal => "Literal",
             Tokenizer::EPIn => "Literal",
             Tokenizer::EPOut => "Literal",

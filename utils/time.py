@@ -176,60 +176,54 @@ class UserFriendlyTime(commands.Converter):
     async def convert(self, ctx, argument):
         self = UserFriendlyTime(self.converter, default=self.default)  # noqa
 
-        try:
-            calendar = HumanTime.calendar
-            now = datetime.datetime.utcnow()
+        calendar = HumanTime.calendar
+        now = datetime.datetime.utcnow()
 
-            # apparently nlp does not like "from now"
-            # it likes "from x" in other cases though so let me handle the 'now' case
-            if argument.endswith("from now"):
-                argument = argument[:-8].strip()
+        # apparently nlp does not like "from now"
+        # it likes "from x" in other cases though so let me handle the 'now' case
+        if argument.endswith("from now"):
+            argument = argument[:-8].strip()
 
-            if argument[0:2] == "me":
-                # starts with "me to", "me in", or "me at "
-                if argument[0:6] in ("me to ", "me in ", "me at "):
-                    argument = argument[6:]
-            if argument.startswith("in "):
-                argument = argument[3:]
+        if argument[0:2] == "me":
+            # starts with "me to", "me in", or "me at "
+            if argument[0:6] in ("me to ", "me in ", "me at "):
+                argument = argument[6:]
+        if argument.startswith("in "):
+            argument = argument[3:]
 
-            elements = calendar.nlp(argument, sourceTime=now)
-            if elements is None or len(elements) == 0:
-                raise commands.BadArgument('Time Error! try "in an hour" or "5 days".')
+        elements = calendar.nlp(argument, sourceTime=now)
+        if elements is None or len(elements) == 0:
+            raise commands.BadArgument('Time Error! try "in an hour" or "5 days".')
 
-            # handle the following cases:
-            # "date time" foo
-            # date time foo
-            # foo date time
+        # handle the following cases:
+        # "date time" foo
+        # date time foo
+        # foo date time
 
-            # first the first two cases:
-            dt, status, begin, end, dt_string = elements[0]
+        # first the first two cases:
+        dt, status, begin, end, dt_string = elements[0]
 
-            self.dt = dt + datetime.timedelta(seconds=1)
+        self.dt = dt + datetime.timedelta(seconds=1)
 
-            if begin in (0, 1):
-                if begin == 1:
-                    # check if it's quoted:
-                    if argument[0] != '"':
-                        raise commands.BadArgument("Expected quote before time input...")
+        if begin in (0, 1):
+            if begin == 1:
+                # check if it's quoted:
+                if argument[0] != '"':
+                    raise commands.BadArgument("Expected quote before time input...")
 
-                    if not (end < len(argument) and argument[end] == '"'):
-                        raise commands.BadArgument("If the time is quoted, you must unquote it.")
+                if not (end < len(argument) and argument[end] == '"'):
+                    raise commands.BadArgument("If the time is quoted, you must unquote it.")
 
-                    remaining = argument[end + 1 :].lstrip(" ,.!")
-                else:
-                    remaining = argument[end:].lstrip(" ,.!")
-            elif len(argument) == end:
-                remaining = argument[:begin].strip()
-
+                remaining = argument[end + 1 :].lstrip(" ,.!")
             else:
-                remaining = ""
+                remaining = argument[end:].lstrip(" ,.!")
+        elif len(argument) == end:
+            remaining = argument[:begin].strip()
 
-            return await self.check_constraints(ctx, now, remaining)
-        except:
-            import traceback
+        else:
+            remaining = ""
 
-            traceback.print_exc()
-            raise
+        return await self.check_constraints(ctx, now, remaining)
 
 
 def human_timedelta(dt, *, source=None, accuracy=3, brief=False, suffix=True):
