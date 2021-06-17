@@ -342,7 +342,9 @@ class ParsingContext:
 
         acts = {
             ActionTypes.dispatch: (False, lambda: self.run_event(action["main_text"], conn, stack, vbls, messageable)),
-            ActionTypes.log: (False, lambda: self.run_logger(action["main_text"], action["event"], conn, stack, vbls)),
+            ActionTypes.log: (False, lambda: self.run_logger(
+                action["main_text"], await self.format_fmt(action["event"], conn, stack, vbls), conn, stack, vbls)
+                ),
             ActionTypes.counter: (
                 False,
                 lambda: self.alter_counter(action["main_text"], conn, stack, action["modify"], action["target"], vbls),
