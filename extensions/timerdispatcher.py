@@ -20,7 +20,6 @@ class CurrentTask:
         self.event: str = r["event"]
 
     async def wait(self):
-        print(self.dispatch_at - discord.utils.utcnow())
         await discord.utils.sleep_until(self.dispatch_at)
 
 
@@ -40,12 +39,10 @@ class Timers(commands.Cog):
             if not task:
                 return  # there are no tasks in the queue
 
-        print(task)
         tsk = self.current_task = CurrentTask(task)
         await tsk.wait()
         self.bot.dispatch(tsk.event, *tsk.data["args"], **tsk.data["kwargs"])
         await self.bot.db.execute("DELETE FROM dispatchers WHERE id = $1", tsk.id)
-        print("done", task)
 
         self.current_task = None
         self.processor = self.bot.loop.create_task(self.process_tasks())
