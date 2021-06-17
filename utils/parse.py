@@ -1000,15 +1000,31 @@ async def builtin_ban(
     if not isinstance(user, int):
         raise ExecutionInterrupt(f"Expected a user id, got {user.__class__.__name__}", stack)
 
-    reason = None
+    reason = duration = None
 
     if len(args) > 1:
         reason = str(await args[1].access(ctx, vbls, conn))
+
+    if len(args) > 2:
+        duration = str(await args[2].access(ctx, vbls, conn))
+        try:
+            duration = ShortTime(duration).dt
+        except commands.BadArgument as e:
+            return f"The duration ('{duration}') is invalid: {e.args[0]}"
 
     name = None
     _exs = ctx.guild.get_member(user)
     if _exs:
         name = str(_exs)
+
+    timers = ctx.bot.get_cog("Timers")
+    if not timers and duration:
+        raise ExecutionInterrupt(
+            "Failed to schedule the unban task. This is an internal error that you should not see.", stack
+        )
+
+    if duration:
+        await timers.schedule_task("ban_complete", duration, conn=conn, guild_id=ctx.guild.id, user_id=user)
 
     try:
         await ctx.guild.ban(discord.Object(id=user), reason=reason)
@@ -1018,7 +1034,10 @@ async def builtin_ban(
         else:
             return f"cannot ban user with id {user}:\n{e.args[0]}"
 
-    caseid = await make_case(ctx, conn, user, "ban", reason or "No reason given", modid=vbls["__callerid__"])
+    if duration:
+        caseid = await make_case(ctx, conn, user, "tempban", reason or "No reason given", modid=vbls["__callerid__"])
+    else:
+        caseid = await make_case(ctx, conn, user, "ban", reason or "No reason given", modid=vbls["__callerid__"])
 
     if "case" in ctx.events:
         mutated = vbls.copy()
@@ -1096,7 +1115,10 @@ async def builtin_ban(
         tid,
     )
 
-    caseid = await make_case(ctx, conn, user, "mute", reason or "No reason given", modid=vbls["__callerid__"])
+    if duration:
+        caseid = await make_case(ctx, conn, user, "tempmute", reason or "No reason given", modid=vbls["__callerid__"])
+    else:
+        caseid = await make_case(ctx, conn, user, "mute", reason or "No reason given", modid=vbls["__callerid__"])
 
     if "case" in ctx.events:
         mutated = vbls.copy()
