@@ -148,7 +148,7 @@ class Dispatch(commands.Cog):
         await self.filled.wait()
 
         guild = self.bot.get_guild(guild_id)
-        if not guild: # we've left the guild
+        if not guild:  # we've left the guild
             return
 
         member: discord.Member = guild.get_member(user_id)
@@ -171,18 +171,18 @@ class Dispatch(commands.Cog):
                 except discord.HTTPException:
                     pass
 
-        if "unmute" in self.cached_triggers['automod'][guild_id]:
+        if "unmute" in self.cached_triggers["automod"][guild_id]:
             vbls = {
                 "userid": user_id,
                 "username": str(member),
                 "usernick": member.nick,
                 "modname": str(self.bot.user),
                 "modid": self.bot.user.id,
-                "reason": "Timed mute expired"
+                "reason": "Timed mute expired",
             }
             async with self.bot.db.acquire() as conn:
                 try:
-                    await ctx.run_automod(self.cached_triggers['automod'][guild_id]['unmute'], conn, vbls=vbls)
+                    await ctx.run_automod(self.cached_triggers["automod"][guild_id]["unmute"], conn, vbls=vbls)
                 except parse.ExecutionInterrupt as e:
                     g = guild.get_channel(self.cached_triggers["configs"][guild.id]["error_channel"])
                     if g:  # drop it silently if it got deleted
@@ -203,7 +203,7 @@ class Dispatch(commands.Cog):
         try:
             await guild.unban(discord.Object(id=user_id))
         except discord.HTTPException:
-            pass # member unbanned already
+            pass  # member unbanned already
         else:
             if guild_id in self.ctx_cache:
                 ctx = self.ctx_cache[guild_id]
@@ -212,7 +212,7 @@ class Dispatch(commands.Cog):
 
             await ctx.fetch_required_data()
 
-            if "unban" in self.cached_triggers['automod'][guild_id]:
+            if "unban" in self.cached_triggers["automod"][guild_id]:
                 vbls = {
                     "userid": user_id,
                     "usercreatedat": discord.utils.snowflake_time(user_id).isoformat(),
@@ -222,7 +222,7 @@ class Dispatch(commands.Cog):
                 }
                 async with self.bot.db.acquire() as conn:
                     try:
-                        await ctx.run_automod(self.cached_triggers['automod'][guild_id]['unban'], conn, vbls=vbls)
+                        await ctx.run_automod(self.cached_triggers["automod"][guild_id]["unban"], conn, vbls=vbls)
                     except parse.ExecutionInterrupt as e:
                         g = guild.get_channel(self.cached_triggers["configs"][guild.id]["error_channel"])
                         if g:  # drop it silently if it got deleted

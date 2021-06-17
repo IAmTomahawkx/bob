@@ -342,9 +342,12 @@ class ParsingContext:
 
         acts = {
             ActionTypes.dispatch: (False, lambda: self.run_event(action["main_text"], conn, stack, vbls, messageable)),
-            ActionTypes.log: (False, lambda: self.run_logger(
-                action["main_text"], await self.format_fmt(action["event"], conn, stack, vbls), conn, stack, vbls)
+            ActionTypes.log: (
+                False,
+                lambda: self.run_logger(
+                    action["main_text"], await self.format_fmt(action["event"], conn, stack, vbls), conn, stack, vbls
                 ),
+            ),
             ActionTypes.counter: (
                 False,
                 lambda: self.alter_counter(action["main_text"], conn, stack, action["modify"], action["target"], vbls),
@@ -1130,7 +1133,7 @@ async def builtin_ban(
         mutated["caseuserid"] = user
         mutated["caseusername"] = member and str(member)
         mutated["muteexpires"] = "indefinitely" if not duration else f"until {duration.isoformat()}"
-        mutated['muteduration'] = human_timedelta(duration)
+        mutated["muteduration"] = human_timedelta(duration)
 
         await ctx.run_event("case", conn, stack, mutated)
 
