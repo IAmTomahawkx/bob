@@ -1145,9 +1145,10 @@ async def builtin_ban(
 
     return f"muted {member}{f' until {duration.isoformat()}' if duration else ''}"
 
+
 @_name("first_exists")
 async def builtin_first_exists(
-        ctx: ParsingContext, conn: asyncpg.Connection, vbls: PARSE_VARS, stack: List[str], args: List[BaseAst]
+    ctx: ParsingContext, conn: asyncpg.Connection, vbls: PARSE_VARS, stack: List[str], args: List[BaseAst]
 ):
     t = None
     for x in args:
@@ -1157,5 +1158,6 @@ async def builtin_first_exists(
 
     else:
         return t
+
 
 FROZEN_BUILTINS = set(BUILTINS.keys())
