@@ -11,7 +11,7 @@ from discord.ext import commands
 from .models import *
 from deps import arg_lex
 from .bot import Bot
-from .time import ShortTime
+from .time import ShortTime, human_timedelta
 
 PARSE_VARS = Optional[Dict[str, Union[str, int, bool]]]
 
@@ -995,7 +995,6 @@ async def builtin_ban(
     ctx: ParsingContext, conn: asyncpg.Connection, vbls: PARSE_VARS, stack: List[str], args: List[BaseAst]
 ):
     user = await args[0].access(ctx, vbls, conn)
-    user = await args[0].access(ctx, vbls, conn)
     if not isinstance(user, int):
         raise ExecutionInterrupt(f"Expected a user id, got {user.__class__.__name__}", stack)
 
@@ -1107,6 +1106,7 @@ async def builtin_ban(
         mutated["caseuserid"] = user
         mutated["caseusername"] = member and str(member)
         mutated["muteexpires"] = "indefinitely" if not duration else f"until {duration.isoformat()}"
+        mutated['muteduration'] = human_timedelta(duration)
 
         await ctx.run_event("case", conn, stack, mutated)
 

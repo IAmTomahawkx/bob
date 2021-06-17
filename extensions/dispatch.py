@@ -17,6 +17,7 @@ class Dispatch(commands.Cog):
     def __init__(self, bot: Bot):
         self.bot = bot
         self.cached_triggers = {}
+        self.ctx_cache = {}
         self.filled = asyncio.Event()
         bot.loop.create_task(self.fill_triggers())
 
@@ -65,6 +66,9 @@ class Dispatch(commands.Cog):
             del self.cached_triggers["events"][guild_id]
             del self.cached_triggers["automod"][guild_id]
 
+        if guild_id in self.ctx_cache:
+            del self.ctx_cache[guild_id]
+
     async def invalidate_cache_for(self, guild_id: int, conn: asyncpg.Connection):
         await self.filled.wait()
         self.filled.clear()
@@ -72,6 +76,9 @@ class Dispatch(commands.Cog):
             del self.cached_triggers["configs"][guild_id]
             del self.cached_triggers["events"][guild_id]
             del self.cached_triggers["automod"][guild_id]
+
+        if guild_id in self.ctx_cache:
+            del self.ctx_cache[guild_id]
 
         data = await conn.fetch(
             """
@@ -115,7 +122,11 @@ class Dispatch(commands.Cog):
         conn: asyncpg.Connection,
         message: discord.Message = None,
     ):
-        ctx = parse.ParsingContext(self.bot, guild)
+        if guild.id in self.ctx_cache:
+            ctx = self.ctx_cache[guild.id]
+        else:
+            ctx = self.ctx_cache[guild.id] = parse.ParsingContext(self.bot, guild)
+
         print(event)
         kwargs["__callerid__"] = self.bot.user.id
 
@@ -128,6 +139,99 @@ class Dispatch(commands.Cog):
                     await g.send(str(e))
                 except discord.HTTPException:
                     pass
+
+    # XXX dispatch firing mechanisms
+
+    @commands.Cog.listener()
+    async def on_mute_complete(self, guild_id: int, user_id: int):
+        await self.bot.wait_until_ready()
+        await self.filled.wait()
+
+        guild = self.bot.get_guild(guild_id)
+        if not guild: # we've left the guild
+            return
+
+        member: discord.Member = guild.get_member(user_id)
+        if guild_id in self.ctx_cache:
+            ctx = self.ctx_cache[guild_id]
+        else:
+            ctx = self.ctx_cache[guild.id] = parse.ParsingContext(self.bot, guild)
+
+        await ctx.fetch_required_data()
+
+        mute_role = guild.get_role(ctx.mute_role)
+
+        if member and mute_role:
+            try:
+                await member.remove_roles(mute_role)
+            except discord.HTTPException as e:
+                g = guild.get_channel(self.cached_triggers["configs"][guild.id]["error_channel"])
+                try:
+                    await g.send(f"Failed to unmute {member}:\n{e.text}")
+                except discord.HTTPException:
+                    pass
+
+        if "unmute" in self.cached_triggers['automod'][guild_id]:
+            vbls = {
+                "userid": user_id,
+                "username": str(member),
+                "usernick": member.nick,
+                "modname": str(self.bot.user),
+                "modid": self.bot.user.id,
+                "reason": "Timed mute expired"
+            }
+            async with self.bot.db.acquire() as conn:
+                try:
+                    await ctx.run_automod(self.cached_triggers['automod'][guild_id]['unmute'], conn, vbls=vbls)
+                except parse.ExecutionInterrupt as e:
+                    g = guild.get_channel(self.cached_triggers["configs"][guild.id]["error_channel"])
+                    if g:  # drop it silently if it got deleted
+                        try:
+                            await g.send(str(e))
+                        except discord.HTTPException:
+                            pass
+
+    @commands.Cog.listener()
+    async def on_ban_complete(self, guild_id: int, user_id: int):
+        await self.bot.wait_until_ready()
+        await self.filled.wait()
+
+        guild = self.bot.get_guild(guild_id)
+        if not guild:  # we've left the guild
+            return
+
+        try:
+            await guild.unban(discord.Object(id=user_id))
+        except discord.HTTPException:
+            pass # member unbanned already
+        else:
+            if guild_id in self.ctx_cache:
+                ctx = self.ctx_cache[guild_id]
+            else:
+                ctx = self.ctx_cache[guild.id] = parse.ParsingContext(self.bot, guild)
+
+            await ctx.fetch_required_data()
+
+            if "unban" in self.cached_triggers['automod'][guild_id]:
+                vbls = {
+                    "userid": user_id,
+                    "usercreatedat": discord.utils.snowflake_time(user_id).isoformat(),
+                    "reason": "Timed ban expired",
+                    "moderator": str(self.bot.user),
+                    "moderatorid": self.bot.user.id,
+                }
+                async with self.bot.db.acquire() as conn:
+                    try:
+                        await ctx.run_automod(self.cached_triggers['automod'][guild_id]['unban'], conn, vbls=vbls)
+                    except parse.ExecutionInterrupt as e:
+                        g = guild.get_channel(self.cached_triggers["configs"][guild.id]["error_channel"])
+                        if g:  # drop it silently if it got deleted
+                            try:
+                                await g.send(str(e))
+                            except discord.HTTPException:
+                                pass
+
+    # XXX discord dispatches
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
@@ -511,11 +615,6 @@ class Dispatch(commands.Cog):
             even = {
                 "userid": user.id,
                 "usercreatedat": user.created_at,
-                "userisbot": user.bot,
-                "username": str(user),
-                "useravatar": user.avatar.with_format("gif").url
-                if user.avatar.is_animated()
-                else user.avatar.with_format("png").url,
                 "reason": reason,
                 "moderator": moderator,
                 "moderatorid": modid,

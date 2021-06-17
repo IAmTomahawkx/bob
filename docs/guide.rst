@@ -143,7 +143,7 @@ We need to turn that ``targetid`` into ``userid`` for the kick event. Here's how
         { do = "$kick($userid, 'you've been kicked')" }
     ]
 
-This tells the parser to create a variable called ``userid`` that is equal to the ``targetid`` variable.
+This tells the parser to create a variable called ``userid`` that is equal to the ``targetid`` variable. ###### CONTINUE FROM HERE ######
 
 Counters
 ========

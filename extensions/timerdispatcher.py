@@ -15,12 +15,12 @@ def setup(bot):
 class CurrentTask:
     def __init__(self, r: Union[asyncpg.Record, dict]):
         self.id: int = r["id"]
-        self.dispatch_at: datetime.datetime = r["dispatch_at"]
+        self.dispatch_at: datetime.datetime = r["dispatch_at"].replace(tzinfo=datetime.timezone.utc)
         self.data: dict = ujson.loads(r["data"])
-        self.guild_id: int = r["guild_id"]
         self.event: str = r["event"]
 
     async def wait(self):
+        print(self.dispatch_at - discord.utils.utcnow())
         await discord.utils.sleep_until(self.dispatch_at)
 
 
@@ -40,9 +40,12 @@ class Timers(commands.Cog):
             if not task:
                 return  # there are no tasks in the queue
 
+        print(task)
         tsk = self.current_task = CurrentTask(task)
         await tsk.wait()
         self.bot.dispatch(tsk.event, *tsk.data["args"], **tsk.data["kwargs"])
+        await self.bot.db.execute("DELETE FROM dispatchers WHERE id = $1", tsk.id)
+        print("done", task)
 
         self.current_task = None
         self.processor = self.bot.loop.create_task(self.process_tasks())
@@ -62,6 +65,9 @@ class Timers(commands.Cog):
             self.processor.cancel()
             self.processor = self.bot.loop.create_task(self.process_tasks(data))
 
+        elif not self.current_task:
+            self.processor = self.bot.loop.create_task(self.process_tasks(data))
+
         return data
 
     async def cancel_task(self, dispatch_id: int, conn: asyncpg.Connection = None) -> Optional[asyncpg.Record]:
@@ -70,6 +76,9 @@ class Timers(commands.Cog):
             data = await conn.fetchrow(query, dispatch_id)
         else:
             data = await self.bot.db.fetchrow(query, dispatch_id)
+
+        if not data:
+            return None
 
         if self.current_task and data["id"] == self.current_task.id:
             self.current_task = None
