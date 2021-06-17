@@ -5,8 +5,8 @@ import itertools
 from typing import Dict, Union
 
 from discord.ext import commands
-from utils.bot import Bot
-from utils import parse
+from core.bot import Bot
+from core import parse
 
 
 def setup(bot: Bot):

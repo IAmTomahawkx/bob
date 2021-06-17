@@ -3,10 +3,10 @@ import discord
 import itertools
 import ujson
 from discord.ext import commands
-from utils.bot import Bot
-from utils import extractor, context, converters
-from utils.models import *
-from utils.views import Confirmation
+from core.bot import Bot
+from core import extractor, context, converters
+from core.models import *
+from core.views import Confirmation
 
 
 def setup(bot: Bot):

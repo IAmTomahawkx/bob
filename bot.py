@@ -1,5 +1,5 @@
 import asyncio
-from utils.bot import Bot
+from core.bot import Bot
 
 try:
     import prettify_exceptions

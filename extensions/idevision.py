@@ -13,8 +13,8 @@ import discord
 from discord.ext import commands
 from discord.ext.commands.view import StringView
 
-from utils import paginator
-from utils.context import Context
+from core import paginator
+from core.context import Context
 
 URL_RE = re.compile(r"http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*(),]|(%[0-9a-fA-F][0-9a-fA-F]))+")
 

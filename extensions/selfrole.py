@@ -7,10 +7,10 @@ from typing import List
 import asyncpg
 import discord
 from discord.ext import commands
-from utils.context import Context
-from utils.bot import Bot
-from utils.extractor import ConfigLoadError
-from utils import views, models
+from core.context import Context
+from core.bot import Bot
+from core.extractor import ConfigLoadError
+from core import views, models
 
 
 def setup(bot):

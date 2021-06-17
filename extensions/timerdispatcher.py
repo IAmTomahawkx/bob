@@ -5,7 +5,7 @@ import asyncpg
 import discord
 import ujson
 from discord.ext import commands
-from utils.bot import Bot
+from core.bot import Bot
 
 
 def setup(bot):

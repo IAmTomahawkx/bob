@@ -3,7 +3,7 @@ import random
 import json
 
 from discord.ext import commands
-from utils.context import Context
+from core.context import Context
 
 
 def setup(bot):
