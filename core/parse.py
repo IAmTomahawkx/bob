@@ -346,9 +346,7 @@ class ParsingContext:
             ActionTypes.dispatch: (False, lambda: self.run_event(action["main_text"], conn, stack, vbls, messageable)),
             ActionTypes.log: (
                 False,
-                lambda: self.run_logger(
-                    action["main_text"], action["event"], conn, stack, vbls
-                ),
+                lambda: self.run_logger(action["main_text"], action["event"], conn, stack, vbls),
             ),
             ActionTypes.counter: (
                 False,
