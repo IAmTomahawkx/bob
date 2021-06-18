@@ -4,7 +4,7 @@ from typing import Union, Optional
 import asyncpg
 import discord
 import ujson
-from discord.ext import commands
+from discord.ext import commands, tasks
 from core.bot import Bot
 
 
@@ -28,6 +28,11 @@ class Timers(commands.Cog):
         self.bot = bot
         self.processor = bot.loop.create_task(self.process_tasks())
         self.current_task: Optional[CurrentTask] = None
+
+        self.run_decay.start()
+
+    def cog_unload(self):
+        self.run_decay.stop()
 
     async def pull_next_task(self) -> asyncpg.Record:
         await self.bot.wait_until_ready()
@@ -83,3 +88,24 @@ class Timers(commands.Cog):
             self.processor = self.bot.loop.create_task(self.process_tasks())
 
         return data
+
+    # this handles the counter decays
+
+    @tasks.loop(seconds=30)
+    async def run_decay(self):
+        query = """
+        UPDATE counter_values
+        SET
+            val = CASE 
+                WHEN val - (SELECT decay_rate FROM counters WHERE counters.id = counter_values.counter_id) > 0
+                THEN val - (SELECT decay_rate FROM counters WHERE counters.id = counter_values.counter_id)
+                ELSE 0
+            END,
+            last_decay = (NOW() AT TIME ZONE 'utc')
+        WHERE
+            last_decay IS NOT NULL AND
+            last_decay <= (NOW() AT TIME ZONE 'utc') AND
+            (SELECT decay_per FROM counters WHERE counters.id = counter_values.counter_id) IS NOT NULL
+        """
+
+        await self.bot.db.execute(query)
