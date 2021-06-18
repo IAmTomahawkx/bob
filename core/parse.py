@@ -198,6 +198,8 @@ class ParsingContext:
         self, name: str, event: str, conn: asyncpg.Connection, stack: List[str], vbls: PARSE_VARS = None
     ):
         await self.fetch_required_data()
+        event = await self.format_fmt(event, conn, stack, vbls)
+
         logger = self.loggers[name]
         stack.append(f"logger '{name}' @ event '{event}'")
         if event in logger["formats"]:
@@ -345,7 +347,7 @@ class ParsingContext:
             ActionTypes.log: (
                 False,
                 lambda: self.run_logger(
-                    action["main_text"], await self.format_fmt(action["event"], conn, stack, vbls), conn, stack, vbls
+                    action["main_text"], action["event"], conn, stack, vbls
                 ),
             ),
             ActionTypes.counter: (

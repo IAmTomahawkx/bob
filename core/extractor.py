@@ -5,7 +5,7 @@ import re
 import toml
 import discord
 from discord.ext import commands
-from utils.context import Context
+from .context import Context
 from .models import *
 
 with open("assets/emoji.regex", encoding="utf8") as f:
