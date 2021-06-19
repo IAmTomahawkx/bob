@@ -1061,7 +1061,7 @@ async def builtin_ban(
 
 
 @_name("mute", 1)
-async def builtin_ban(
+async def builtin_mute(
     ctx: ParsingContext, conn: asyncpg.Connection, vbls: PARSE_VARS, stack: List[str], args: List[BaseAst]
 ):
     user = await args[0].access(ctx, vbls, conn)
