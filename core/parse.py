@@ -14,6 +14,7 @@ from .bot import Bot
 from .time import ShortTime, human_timedelta
 from .ast import *
 
+
 class ExecutionInterrupt(Exception):
     def __init__(self, msg: str, stack: List[str]):
         self.msg = msg
@@ -185,7 +186,7 @@ class ParsingContext:
             stack.pop()
 
             r = await self.run_action(act, conn, args, stack, i, messageable)
-            #stack.pop()
+            # stack.pop()
             if r and messageable:
                 try:
                     await messageable.send(r)
@@ -564,6 +565,7 @@ class ParsingContext:
             true_output.append(x)
 
         return true_output
+
 
 # builtins and stuff
 

@@ -168,7 +168,8 @@ class Config(commands.Cog):
                 derefed = {x["name"] for x in derefed}
 
                 await conn.execute(
-                    "DELETE FROM actions WHERE id = ANY($1)", list(itertools.chain(x["actions"] for x in rows if x['actions']))
+                    "DELETE FROM actions WHERE id = ANY($1)",
+                    list(itertools.chain(x["actions"] for x in rows if x["actions"])),
                 )
 
                 step += 1
@@ -299,7 +300,8 @@ class Config(commands.Cog):
                 )
 
                 await conn.execute(
-                    "DELETE FROM actions WHERE id = ANY($1)", list(itertools.chain(x["actions"] for x in rows if x['actions']))
+                    "DELETE FROM actions WHERE id = ANY($1)",
+                    list(itertools.chain(x["actions"] for x in rows if x["actions"])),
                 )
 
                 await conn.execute(

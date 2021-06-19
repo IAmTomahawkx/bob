@@ -16,10 +16,11 @@ __all__ = (
     "BiOpExpr",
     "ChainedBiOpExpr",
     "Literal",
-    "Whitespace"
+    "Whitespace",
 )
 
 PARSE_VARS = Optional[Dict[str, Union[str, int, bool]]]
+
 
 class BaseAst:
     __slots__ = "value", "start", "token", "stack"
@@ -238,4 +239,3 @@ class Literal(BaseAst):
 class Whitespace(BaseAst):
     async def access(self, ctx: ParsingContext, vbls: Optional[PARSE_VARS], conn: asyncpg.Connection) -> Any:
         return self.value
-

@@ -32,7 +32,6 @@ class ConfigLoadError(Exception):
         super().__init__(msg)
 
 
-
 async def parse_guild_config(cfg: str, ctx: Context) -> GuildConfig:
     config = GuildConfig(ctx.guild.id)
 
@@ -400,16 +399,13 @@ async def parse_action(action: Dict[str, Any], context: str, n: int) -> Actions:
     if "args" in action and not isinstance(action["args"], dict):
         raise ConfigLoadError(
             f"Failed to parse 'args' for action {n} ({context}). "
-            f"Expected a dictionary of `variablename = \"$some %stuff\""
+            f'Expected a dictionary of `variablename = "$some %stuff"'
         )
 
     if "if" in action:
-        parsed = await static_parse(action['if'], context + " (conditional)")
+        parsed = await static_parse(action["if"], context + " (conditional)")
         if not all(isinstance(x, (BiOpExpr, ChainedBiOpExpr)) for x in parsed) or 1 < len(parsed) < 1:
-            raise ConfigLoadError(
-                f"Failed to parse conditional for action {n} ({context}). "
-                f"Expected a comparison."
-            )
+            raise ConfigLoadError(f"Failed to parse conditional for action {n} ({context}). " f"Expected a comparison.")
 
     if "counter" in action:
         try:
