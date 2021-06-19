@@ -814,6 +814,7 @@ async def resolve_channel(
 
     return channels[0]
 
+
 async def resolve_role(
     ctx: ParsingContext, arg: BaseAst, vbls: PARSE_VARS, conn: asyncpg.Connection, stack: List[str]
 ) -> discord.Role:
@@ -837,7 +838,6 @@ async def resolve_role(
         )
 
     return roles[0]
-
 
 
 BUILTINS = dict()
@@ -1194,13 +1194,14 @@ async def builtin_give_role(
     if r.position <= ctx.guild.me.top_role.position:
         return
 
-    if r in member.roles: # at worst this is like 250 iterations
+    if r in member.roles:  # at worst this is like 250 iterations
         return
 
     try:
         await member.add_roles(r)
     except discord.HTTPException:
         pass
+
 
 @_name("removerole", 2)
 async def builtin_give_role(
@@ -1219,7 +1220,7 @@ async def builtin_give_role(
     if r.position <= ctx.guild.me.top_role.position:
         return
 
-    if r not in member.roles: # at worst this is like 250 iterations
+    if r not in member.roles:  # at worst this is like 250 iterations
         return
 
     try:
