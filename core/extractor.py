@@ -5,8 +5,11 @@ import re
 import toml
 import discord
 from discord.ext import commands
+
+from deps import arg_lex
 from .context import Context
 from .models import *
+from .ast import *
 
 with open("assets/emoji.regex", encoding="utf8") as f:
     _emoji_re = f.read()
@@ -28,21 +31,6 @@ class ConfigLoadError(Exception):
         self.msg = msg
         super().__init__(msg)
 
-
-class InvalidChannelReference(ConfigLoadError):
-    pass
-
-
-class InvalidRoleReference(ConfigLoadError):
-    pass
-
-
-class InvalidEmojiReference(ConfigLoadError):
-    pass
-
-
-class AutoSelfRoleFailure(ConfigLoadError):
-    pass
 
 
 async def parse_guild_config(cfg: str, ctx: Context) -> GuildConfig:
@@ -148,14 +136,14 @@ async def resolve_auto_selfrole(ctx: Context, section: Dict[str, Any], context: 
     mode = SelfRoleMode(section["mode"])
 
     if mode is SelfRoleMode.command:
-        raise AutoSelfRoleFailure(f"Cannot use auto-message loader with the `command` mode. ({context})")
+        raise ConfigLoadError(f"Cannot use auto-message loader with the `command` mode. ({context})")
 
     try:
         msg = await commands.MessageConverter().convert(ctx, message)
     except commands.ChannelNotReadable:
-        raise AutoSelfRoleFailure(f"The message linked is not in a readable channel ({context})")
+        raise ConfigLoadError(f"The message linked is not in a readable channel ({context})")
     except commands.MessageNotFound:
-        raise AutoSelfRoleFailure(f"Unable to find the message linked ({context})")
+        raise ConfigLoadError(f"Unable to find the message linked ({context})")
 
     roles = []
     for line in msg.content.split("\n"):
@@ -412,8 +400,16 @@ async def parse_action(action: Dict[str, Any], context: str, n: int) -> Actions:
     if "args" in action and not isinstance(action["args"], dict):
         raise ConfigLoadError(
             f"Failed to parse 'args' for action {n} ({context}). "
-            f'Expected a dictionary of `variablename = "$some %stuff"'
+            f"Expected a dictionary of `variablename = \"$some %stuff\""
         )
+
+    if "if" in action:
+        parsed = await static_parse(action['if'], context + " (conditional)")
+        if not all(isinstance(x, (BiOpExpr, ChainedBiOpExpr)) for x in parsed) or 1 < len(parsed) < 1:
+            raise ConfigLoadError(
+                f"Failed to parse conditional for action {n} ({context}). "
+                f"Expected a comparison."
+            )
 
     if "counter" in action:
         try:
@@ -468,17 +464,17 @@ async def parse_action(action: Dict[str, Any], context: str, n: int) -> Actions:
 async def resolve_channel(ctx: Context, arg: Union[str, int], parse_context: str) -> int:
     if isinstance(arg, int):
         if not any(x.id == arg for x in ctx.guild.channels):
-            raise InvalidChannelReference(f"The referenced channel, {arg}, ({parse_context}), is invalid (not found).")
+            raise ConfigLoadError(f"The referenced channel, {arg}, ({parse_context}), is invalid (not found).")
 
         return arg
 
     _arg = arg.lstrip("#").lower()
     channels = tuple(x for x in ctx.guild.channels if x.name.lower() == _arg and isinstance(x, discord.TextChannel))
     if not channels:
-        raise InvalidChannelReference(f"The referenced channel, {arg}, ({parse_context}), is invalid (not found).")
+        raise ConfigLoadError(f"The referenced channel, {arg}, ({parse_context}), is invalid (not found).")
 
     if len(channels) > 1:
-        raise InvalidChannelReference(
+        raise ConfigLoadError(
             f"There are multiple channels named {arg}, refusing to infer the correct one. "
             f"Maybe use a channel id? ({parse_context})"
         )
@@ -489,17 +485,17 @@ async def resolve_channel(ctx: Context, arg: Union[str, int], parse_context: str
 async def resolve_role(ctx: Context, arg: Union[str, int], parse_context: str) -> int:
     if isinstance(arg, int):
         if not any(x.id == arg for x in ctx.guild.roles):
-            raise InvalidChannelReference(f"The referenced role, {arg}, ({parse_context}), is invalid (not found).")
+            raise ConfigLoadError(f"The referenced role, {arg}, ({parse_context}), is invalid (not found).")
 
         return arg
 
     _arg = arg.lstrip("@").lower()
     roles = tuple(x for x in ctx.guild.roles if x.name.lower() == _arg)
     if not roles:
-        raise InvalidChannelReference(f"The referenced role, {arg}, ({parse_context}), is invalid (not found).")
+        raise ConfigLoadError(f"The referenced role, {arg}, ({parse_context}), is invalid (not found).")
 
     if len(roles) > 1:
-        raise InvalidChannelReference(
+        raise ConfigLoadError(
             f"There are multiple roles named {arg}, refusing to infer the correct one. "
             f"Maybe use a role id? ({parse_context})"
         )
@@ -510,7 +506,7 @@ async def resolve_role(ctx: Context, arg: Union[str, int], parse_context: str) -
 async def resolve_emoji(ctx: Context, arg: Union[str, int], parse_context: str) -> Union[str, int]:
     if isinstance(arg, int):
         if not any(x.id == arg for x in ctx.guild.emojis):
-            raise InvalidChannelReference(f"The referenced emoji, {arg}, ({parse_context}), is invalid (not found).")
+            raise ConfigLoadError(f"The referenced emoji, {arg}, ({parse_context}), is invalid (not found).")
 
         return arg
 
@@ -522,4 +518,185 @@ async def resolve_emoji(ctx: Context, arg: Union[str, int], parse_context: str) 
         if EMOJI_RE.fullmatch(arg):
             return arg
 
-        raise InvalidEmojiReference(f"The referenced emoji, {arg}, ({parse_context}), is invalid (not found).")
+        raise ConfigLoadError(f"The referenced emoji, {arg}, ({parse_context}), is invalid (not found).")
+
+
+async def static_parse(parsable: str, context: str) -> List[BaseAst]:
+    tokens = arg_lex.run_lex(parsable)
+    output: List[Union[BiOpExpr, ChainedBiOpExpr, CounterAccess, VariableAccess, Literal]] = []
+    depth: List[Union[CounterAccess, VariableAccess, Literal]] = []  # noqa
+    last = None
+
+    it = iter(tokens)
+
+    def _whitespace(token):
+        if not depth:
+            output.append(Literal(token, []))
+
+    def _error(token):
+        nonlocal depth, last
+        try:
+            if depth:
+                depth[-1] += token.value
+            else:
+                output[-1] += token.value
+        except:  # noqa
+            if depth:
+                depth.append(Literal(token, []))
+            else:
+                output.append(Literal(token, []))
+
+    def _pin(token):
+        nonlocal depth, last
+        if not depth and isinstance(output[-1], Literal) and str(output[-1].value).endswith("\\"):
+            output[-1].value = output[-1].value.rstrip("\\") + "("
+            return
+
+        if depth and last is depth[-1]:
+            raise ConfigLoadError(
+                f"{context}\n| {parsable}\n| {' '*token.start}{'^'*(token.end-token.start)}\n| Doubled in-parentheses"
+            )
+
+        if not isinstance(last, (CounterAccess, VariableAccess)):
+            raise ConfigLoadError(
+                f"{context}\n| {parsable}\n| {' '*token.start}{'^'*(token.end-token.start)}\n| Unexpected in-parentheses"
+            )
+
+        depth.append(last)
+
+    def _pout(token):
+        nonlocal depth, last
+        if not depth and isinstance(output[-1], Literal) and str(output[-1].value).endswith("\\"):
+            output[-1].value = output[-1].value.rstrip("\\") + ")"
+            return
+
+        if not depth:
+            raise ConfigLoadError(
+                f"{context}\n| {parsable}\n| {' '*token.start}{'^'*(token.end-token.start)}\n| Unexpected out-parentheses",
+            )
+
+        depth.pop()
+
+    def _counter(token):
+        nonlocal depth, last
+        last = CounterAccess(token, [])
+        if depth:
+            depth[-1].args.append(last)
+        else:
+            output.append(last)
+
+    def _var(token):
+        nonlocal depth, last
+        last = VariableAccess(token, [])
+        if depth:
+            depth[-1].args.append(last)
+        else:
+            output.append(last)
+
+    def _literal(token):
+        nonlocal depth, last
+        last = Literal(token, [])
+        if depth:
+            depth[-1].args.append(last)
+        else:
+            output.append(last)
+
+    def _chained(token):
+        nonlocal depth, last
+        last = ChainedBiOpExpr(token, [])
+        if depth:
+            depth[-1].args.append(last)
+        else:
+            output.append(last)
+
+    def _var_sep(token):
+        nonlocal depth, last
+        if not depth:
+            _error(token)
+
+    typs = {
+        "Whitespace": _whitespace,
+        "Var": _var,
+        "Counter": _counter,
+        "POut": _pout,
+        "PIn": _pin,
+        "Literal": _literal,
+        "Error": _error,
+        "And": _chained,
+        "Or": _chained,
+        "VarSep": _var_sep,
+    }
+    oprs = {"EQ", "NEQ", "SEQ", "GEQ", "SQ", "GQ"}
+    for _token in it:
+        t = typs.get(_token.name)
+        if t:
+            t(_token)
+
+        elif _token.name in oprs:
+            if depth:
+                depth[-1].args.append(BiOpExpr(_token, []))
+            else:
+                output.append(BiOpExpr(_token, []))
+
+    true_output = []
+    it = iter(enumerate(output))
+    for i, x in it:
+        if isinstance(x, BiOpExpr):
+            if not true_output:
+                raise ConfigLoadError(
+                    f"{context}\n| {parsable}\n| {' '*x.token.start}{'^'*(x.token.end-x.token.start)}\n| Unexpected comparison here"
+                )
+
+            x.left = true_output.pop()
+            try:
+                x.right = next(it)[1]  # noqa
+            except StopIteration:
+                raise ConfigLoadError(
+                    f"{context}\n| {parsable}\n| {' '*x.token.start}{'^'*(x.token.end-x.token.start)}\n| "
+                    "Unexpected comparison here: missing something to compare to\n"
+                    fr"| HINT: If you're not trying to compare something, escape the '{x.value}' like this: '\\{x.value}'"
+                )
+
+            true_output.append(x)
+            continue
+
+        elif isinstance(x, ChainedBiOpExpr):
+            true_output.append(x)
+
+        else:
+            cont = "'" + x.value + "'"
+            raise ConfigLoadError(
+                f"{context}\n| {parsable}\n| {' ' * x.token.start}{'^' * len(x.value)}\n| "
+                f"Unexpected value here\n| "
+                f"HINT: conditionals must be only comparisons. If you meant to compare text, wrap it in quotation marks:\n| "
+                f"{parsable.replace(x.value, cont, 1)}"
+            )
+
+    output = true_output
+    true_output = []
+    it = iter(enumerate(output))
+
+    # for those wondering, i do two loops here because i need to collect all the BiOpExprs before i can collect the ChainedBiOpExprs
+    for i, x in it:
+        if isinstance(x, ChainedBiOpExpr):
+            if not true_output:
+                raise ConfigLoadError(
+                    f"{context}\n| {parsable}\n| {' '*x.token.start}{'^'*(x.token.end-x.token.start)}\n| Unexpected '{x.value}' here"
+                )
+
+            x.left = true_output.pop()
+            try:
+                x.right = next(it)[1]  # noqa
+            except StopIteration:
+                raise ConfigLoadError(
+                    f"{context}\n| {parsable}\n| {' '*x.token.start}{'^'*(x.token.end-x.token.start)}\n| "
+                    "Unexpected chained comparison here: missing something a comparison on the right side\n"
+                    fr"| HINT: If you're not trying to chain something, escape the '{x.value}' like this: '\\{x.value}'"
+                )
+
+            true_output.append(x)
+            continue
+
+        true_output.append(x)
+
+    return true_output

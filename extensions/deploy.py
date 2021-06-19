@@ -116,7 +116,7 @@ class Config(commands.Cog):
             nonlocal ctx, content, step, msg
             _cont = "\n".join(f"{i+1}. {x}" for i, x in enumerate(STEPS) if i < step)
             if err:
-                _cont = f"Failed to deploy new configuration:\n{_cont}\n{err}"
+                _cont = f"Failed to deploy new configuration:\n{_cont}\nFailed to deploy, here's why:```\n{err}\n```"
             elif success:
                 _cont = f"{content}\n{_cont}\nSuccessfully deployed new configuration"
             else:
@@ -168,7 +168,7 @@ class Config(commands.Cog):
                 derefed = {x["name"] for x in derefed}
 
                 await conn.execute(
-                    "DELETE FROM actions WHERE id = ANY($1)", list(itertools.chain(x["actions"] for x in rows))
+                    "DELETE FROM actions WHERE id = ANY($1)", list(itertools.chain(x["actions"] for x in rows if x['actions']))
                 )
 
                 step += 1
@@ -299,7 +299,7 @@ class Config(commands.Cog):
                 )
 
                 await conn.execute(
-                    "DELETE FROM actions WHERE id = ANY($1)", list(itertools.chain(x["actions"] for x in rows))
+                    "DELETE FROM actions WHERE id = ANY($1)", list(itertools.chain(x["actions"] for x in rows if x['actions']))
                 )
 
                 await conn.execute(
