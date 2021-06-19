@@ -814,6 +814,31 @@ async def resolve_channel(
 
     return channels[0]
 
+async def resolve_role(
+    ctx: ParsingContext, arg: BaseAst, vbls: PARSE_VARS, conn: asyncpg.Connection, stack: List[str]
+) -> discord.Role:
+    data = await arg.access(ctx, vbls, conn)
+    if isinstance(arg, int):
+        if not any(x.id == arg for x in ctx.guild.roles):
+            raise ExecutionInterrupt(f"The referenced role, {data}, is invalid (not found).", stack)
+
+        return ctx.guild.get_role(data)
+
+    _arg = data.lstrip("@").lower()
+    roles = tuple(x for x in ctx.guild.roles if x.name.lower() == _arg)
+    if not roles:
+        raise ExecutionInterrupt(f"The referenced role, {data}, is invalid (not found).", stack)
+
+    if len(roles) > 1:
+        raise ExecutionInterrupt(
+            f"| {{input}}\n| {' ' * arg.token.start}{'^' * (arg.token.end - arg.token.start)}\n| "
+            f"There are multiple roles named '{_arg}'. Refusing to infer the correct one",
+            arg.stack,
+        )
+
+    return roles[0]
+
+
 
 BUILTINS = dict()
 
@@ -1146,7 +1171,64 @@ async def builtin_mute(
     return f"muted {member}{f' until {duration.isoformat()}' if duration else ''}"
 
 
-@_name("first_exists")
+@_name("addrole", 2)
+async def builtin_give_role(
+    ctx: ParsingContext, conn: asyncpg.Connection, vbls: PARSE_VARS, stack: List[str], args: List[BaseAst]
+):
+    user = await args[0].access(ctx, vbls, conn)
+    if not isinstance(user, int):
+        raise ExecutionInterrupt(f"Argument 1: expected a user id, got {user.__class__.__name__}", stack)
+
+    member = ctx.guild.get_member(user)
+    if not member:
+        raise ExecutionInterrupt(f"Argument 1: the given member id is invalid", stack)
+
+    role = await args[1].access(ctx, vbls, conn)
+    if not isinstance(role, int):
+        raise ExecutionInterrupt(f"Argument 2: expected a role id, got {user.__class__.__name__}", stack)
+
+    r = ctx.guild.get_role(role)
+    if not r:
+        raise ExecutionInterrupt(f"Argument 2: the given role id is invalid", stack)
+
+    if r.position <= ctx.guild.me.top_role.position:
+        return
+
+    if r in member.roles: # at worst this is like 250 iterations
+        return
+
+    try:
+        await member.add_roles(r)
+    except discord.HTTPException:
+        pass
+
+@_name("removerole", 2)
+async def builtin_give_role(
+    ctx: ParsingContext, conn: asyncpg.Connection, vbls: PARSE_VARS, stack: List[str], args: List[BaseAst]
+):
+    user = await args[0].access(ctx, vbls, conn)
+    if not isinstance(user, int):
+        raise ExecutionInterrupt(f"Argument 1: expected a user id, got {user.__class__.__name__}", stack)
+
+    member = ctx.guild.get_member(user)
+    if not member:
+        raise ExecutionInterrupt(f"Argument 1: the given member id is invalid", stack)
+
+    r = await resolve_role(ctx, args[1], vbls, conn, stack)
+
+    if r.position <= ctx.guild.me.top_role.position:
+        return
+
+    if r not in member.roles: # at worst this is like 250 iterations
+        return
+
+    try:
+        await member.remove_roles(r)
+    except discord.HTTPException:
+        pass
+
+
+@_name("coalesce")
 async def builtin_first_exists(
     ctx: ParsingContext, conn: asyncpg.Connection, vbls: PARSE_VARS, stack: List[str], args: List[BaseAst]
 ):
