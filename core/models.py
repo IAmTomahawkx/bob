@@ -149,7 +149,7 @@ class CommandArgumentType(Enum):
 class CommandArgument(TypedDict):
     name: str
     type: CommandArgumentType
-    consume: int
+    optional: bool
 
 
 class Command(TypedDict):
@@ -180,7 +180,7 @@ class GuildConfig:
         self.events = []
         self.automod_events: Dict[str, Automod] = {}
         self.loggers = {}
-        self.commands = {}
+        self.commands: Dict[str, Command] = {}
 
 
 class SparseGuildConfig:

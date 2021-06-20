@@ -69,11 +69,11 @@ format.history-join = "$target has joined. They have more than 5 previous cases"
 [[command]]
 name = "warn"
 arguments = [
-    { name = "target", type = "user", consume = 1},
-    { name = "reason", type = "text", consume = "all"}
+    { name = "target", type = "user" },
+    { name = "reason", type = "text" } # last argument will always get the full remaining text
 ]
 actions = [
-    { do = "$newcase($targetid, $authorid, $reason, $messagelink, 'warn')" },
+    { do = "$savecase($targetid, $authorid, $reason, $messagelink, 'warn')" },
     { dispatch = "warn", args = { reason = "$reason", target = "$targetname", targetid = "$targetid" } },
     { reply = "Warned $targetname" }
 ]

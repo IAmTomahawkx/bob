@@ -248,6 +248,7 @@ class Dispatch(commands.Cog):
                 "channelid": message.channel.id,
                 "channelname": message.channel.name,
                 "messageid": message.id,
+                "messagelink": message.jump_url
             }
             async with self.bot.db.acquire() as conn:
                 await conn.execute(

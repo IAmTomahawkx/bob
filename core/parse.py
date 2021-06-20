@@ -1,5 +1,6 @@
 from __future__ import annotations
-from typing import Optional, List, Dict, Union, Any
+import itertools
+from typing import Optional, List, Union
 
 import datetime
 import re
@@ -8,9 +9,12 @@ import asyncpg
 import discord
 import ujson
 from discord.ext import commands
-from .models import *
+from discord.ext.commands.view import StringView
+
 from deps import arg_lex
+from .models import *
 from .bot import Bot
+from .context import Context
 from .time import ShortTime, human_timedelta
 from .ast import *
 
@@ -69,6 +73,40 @@ class ParsingContext:
             WHERE l.cfg_id = $1
             """
             loggers = await conn.fetch(query, cfg_id)
+
+            query = """
+            SELECT
+                type,
+                optional,
+                c.actions,
+                commands_arguments.name as arg_name,
+                command_arguments.id as arg_id,
+                c.id as cmd_id, 
+                c.name as cmd_name
+            FROM command_arguments
+            INNER JOIN commands c on command_arguments.command_id = c.id
+            WHERE c.cfg_id = $1
+            ORDER BY command_arguments.id
+            """
+            cmds = await conn.fetch(query, cfg_id)
+
+            self.commands = _cmds = {}
+            actions = []
+            for cmdname, rows in itertools.groupby(cmds, key=lambda c: c['cmd_name']):
+                rows = list(rows)
+                _cmds[cmdname] = {
+                    "args": [{
+                        "name": x['arg_name'],
+                        "optional": x['optional'],
+                        "type": x['type'],
+                        "id": x['arg_id']
+                    } for x in rows if x['name']], # if it doesnt have args, it inserts a blank named arg
+                    "actions": rows[0]['actions'],
+                    "id": rows[0]['cmd_id']
+                }
+                actions.extend(rows[0]['actions'])
+
+            await self.link(actions, conn)
 
         self.events = {}
         for x in events:
@@ -566,6 +604,132 @@ class ParsingContext:
 
         return true_output
 
+    async def parse_command(self, message: discord.Message, conn: asyncpg.Connection, invoker: str, view: StringView):
+        ctx = Context(prefix=None, view=view, bot=self.bot, message=message)
+        await self.fetch_required_data()
+
+        if invoker not in self.commands:
+            return
+
+        cmd = self.commands[invoker]
+        stack = ["<dispatch>", f"command {invoker}"]
+        vbls = {
+            "authorid": message.author.id,
+            "authorname": str(message.author),
+            "authornick": message.author.nick,
+            "channelid": message.channel.id,
+            "channelname": message.channel.name,
+            "messagecontent": message.content,
+            "messageid": message.id,
+            "messagelink": message.jump_url
+        }
+        ln = len(cmd['args']) - 1
+        for i, x in enumerate(cmd['args']):
+            vbls.update(await self.parse_command_arg(ctx, x, view, stack, i == ln))
+
+        for i, runner in enumerate(cmd["actions"]):
+            runner = self.actions[runner]
+
+            stack.append(f"parse action #{i}")
+            args = (vbls and vbls.copy()) or {}
+
+            if runner["args"]:
+                stack.append(f"'args' values parsing")
+                args.update(
+                    {
+                        k.strip("$"): await self.format_fmt(v, conn, stack, args, True)
+                        for k, v in runner["args"].items()
+                    }
+                )
+                stack.pop()
+
+            stack.pop()
+
+            r = await self.run_action(runner, conn, args, stack, i)
+            if r:
+                await message.reply(r)
+
+    async def parse_command_arg(self, ctx: Context, arg: dict, view: StringView, stack: List[str], is_last: bool):
+        typs = {
+            "user": _cmdargs_vars_from_user,
+            "member": _cmdargs_vars_from_member,
+            "channel": _cmdargs_vars_from_channel,
+            "role": _cmdargs_vars_from_role,
+            "message": _cmdargs_vars_from_message,
+            "number": _cmdargs_vars_from_int,
+            "text": _cmdargs_vars_from_str,
+        }
+
+        try:
+            return await typs[arg['type']](self, arg['name'], ctx, view.get_quoted_word() if not is_last else view.read_rest())
+        except Exception as e:
+            if arg['optional']:
+                view.undo()
+            else:
+                raise ExecutionInterrupt(f"Failed to parse argument {arg['name']}: {e.args[0]}", stack)
+
+async def _cmdargs_vars_from_user(_: ParsingContext, name: str, cont: Context, arg: str):
+    user = await commands.UserConverter().convert(cont, arg)
+    return {
+        f"{name}id": user.id,
+        f"{name}name": str(user),
+        f"{name}created": f"<t:{int(user.created_at.timestamp())}:F>",
+        f"{name}isbot": user.bot
+    }
+
+async def _cmdargs_vars_from_member(_: ParsingContext, name: str, cont: Context, arg: str):
+    user = await commands.MemberConverter().convert(cont, arg)
+    return {
+        f"{name}id": user.id,
+        f"{name}name": str(user),
+        f"{name}created": f"<t:{int(user.created_at.timestamp())}:F>",
+        f"{name}isbot": user.bot,
+        f"{name}joined": f"<t:{int(user.joined_at.timestamp())}:F>",
+        f"{name}nickname": user.nick
+    }
+
+async def _cmdargs_vars_from_channel(_: ParsingContext, name: str, cont: Context, arg: str):
+    chnl = await commands.TextChannelConverter().convert(cont, arg)
+    return {
+        f"{name}id": chnl.id,
+        f"{name}name": chnl.name,
+        f"{name}slowmode": chnl.slowmode_delay,
+        f"{name}topic": chnl.topic,
+        f"{name}nsfw": chnl.nsfw
+    }
+
+async def _cmdargs_vars_from_role(_: ParsingContext, name: str, cont: Context, arg: str):
+    role = await commands.RoleConverter().convert(cont, arg)
+    return {
+        f"{name}id": role.id,
+        f"{name}name": role.name,
+        f"{name}position": role.position,
+        f"{name}colour": role.colour.value,
+        f"{name}hoisted": role.hoist
+    }
+
+async def _cmdargs_vars_from_message(_: ParsingContext, name: str, cont: Context, arg: str):
+    msg = await commands.MessageConverter().convert(cont, arg)
+    return {
+        f"{name}id": msg.id,
+        f"{name}channelid": msg.channel.id,
+        f"{name}channelname": msg.channel.name,
+        f"{name}authorid": msg.author.id,
+        f"{name}authorname": str(msg.author),
+        f"{name}content": msg.content,
+        f"{name}pinned": msg.pinned
+    }
+
+async def _cmdargs_vars_from_int(_: ParsingContext, name: str, __: Context, arg: str):
+    d = int(arg)
+    return {
+        name: d
+    }
+
+async def _cmdargs_vars_from_str(_: ParsingContext, name: str, __: Context, arg: str):
+    return {
+        name: arg
+    }
 
 # builtins and stuff
 
@@ -1011,7 +1175,7 @@ async def builtin_give_role(
 
 @_name("coalesce")
 async def builtin_first_exists(
-    ctx: ParsingContext, conn: asyncpg.Connection, vbls: PARSE_VARS, stack: List[str], args: List[BaseAst]
+    ctx: ParsingContext, conn: asyncpg.Connection, vbls: PARSE_VARS, _: List[str], args: List[BaseAst]
 ):
     t = None
     for x in args:

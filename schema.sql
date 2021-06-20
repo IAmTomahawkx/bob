@@ -72,7 +72,7 @@ CREATE TABLE IF NOT EXISTS command_arguments
     command_id INTEGER NOT NULL REFERENCES commands(id) ON DELETE CASCADE,
     name TEXT NOT NULL,
     type TEXT NOT NULL,
-    consume TEXT NOT NULL DEFAULT '1'
+    optional BOOL NOT NULL DEFAULT FALSE
 );
 CREATE TABLE IF NOT EXISTS automod
 (

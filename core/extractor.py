@@ -31,6 +31,21 @@ class ConfigLoadError(Exception):
         self.msg = msg
         super().__init__(msg)
 
+def _convert_bool(arg: Any):
+    if arg is True or arg is False:
+        return arg
+
+    if isinstance(arg, str):
+        if arg.lower() in ("true", "t", "yes", "y", "1"):
+            return True
+        return False
+
+    elif isinstance(arg, int):
+        return bool(arg)
+
+    else:
+        raise ValueError("bad argument given to convert_bool")
+
 
 async def parse_guild_config(cfg: str, ctx: Context) -> GuildConfig:
     config = GuildConfig(ctx.guild.id)
@@ -351,31 +366,13 @@ async def parse_guild_commands(cfg: Union[Dict[str, Any], List[Dict[str, Any]]])
                 try:
                     _name = str(arg["name"])
                     _type = CommandArgumentType(arg["type"])
-                    consume = arg.get("consume", "1")
-                    try:
-                        consume = int(consume)
-                        if consume <= 0:
-                            raise ConfigLoadError(
-                                f"Unable to parse argument #{n+1} for {context}. Expected a positive "
-                                f"value, minimum value (i.e. '1+'), or \"all\" for `consume`"
-                            )
-                    except ValueError:
-                        if consume == "all":
-                            consume = 0
-                        elif "+" in consume:
-                            try:
-                                consume = int(consume.replace("+", "")) * -1
-                            except ValueError:
-                                raise ConfigLoadError(
-                                    f"Unable to parse argument #{n + 1} for {context}. Expected a positive "
-                                    f"value, minimum value (i.e. '1+'), or \"all\" for `consume`"
-                                )
+                    optional = _convert_bool(arg.get("optional", False))
                 except KeyError as e:
                     raise ConfigLoadError(
                         f"Unable to parse argument #{n + 1} for {context}. Missing the '{e.args[0]}' " "config key"
                     )
 
-                arguments.append(CommandArgument(name=_name, type=_type, consume=consume))
+                arguments.append(CommandArgument(name=_name, type=_type, optional=optional))
 
             if not isinstance(cmd["actions"], list):
                 raise ConfigLoadError(
