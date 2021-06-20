@@ -92,19 +92,18 @@ class ParsingContext:
 
             self.commands = _cmds = {}
             actions = []
-            for cmdname, rows in itertools.groupby(cmds, key=lambda c: c['cmd_name']):
+            for cmdname, rows in itertools.groupby(cmds, key=lambda c: c["cmd_name"]):
                 rows = list(rows)
                 _cmds[cmdname] = {
-                    "args": [{
-                        "name": x['arg_name'],
-                        "optional": x['optional'],
-                        "type": x['type'],
-                        "id": x['arg_id']
-                    } for x in rows if x['name']], # if it doesnt have args, it inserts a blank named arg
-                    "actions": rows[0]['actions'],
-                    "id": rows[0]['cmd_id']
+                    "args": [
+                        {"name": x["arg_name"], "optional": x["optional"], "type": x["type"], "id": x["arg_id"]}
+                        for x in rows
+                        if x["name"]
+                    ],  # if it doesnt have args, it inserts a blank named arg
+                    "actions": rows[0]["actions"],
+                    "id": rows[0]["cmd_id"],
                 }
-                actions.extend(rows[0]['actions'])
+                actions.extend(rows[0]["actions"])
 
             await self.link(actions, conn)
 
@@ -621,10 +620,10 @@ class ParsingContext:
             "channelname": message.channel.name,
             "messagecontent": message.content,
             "messageid": message.id,
-            "messagelink": message.jump_url
+            "messagelink": message.jump_url,
         }
-        ln = len(cmd['args']) - 1
-        for i, x in enumerate(cmd['args']):
+        ln = len(cmd["args"]) - 1
+        for i, x in enumerate(cmd["args"]):
             vbls.update(await self.parse_command_arg(ctx, x, view, stack, i == ln))
 
         for i, runner in enumerate(cmd["actions"]):
@@ -636,10 +635,7 @@ class ParsingContext:
             if runner["args"]:
                 stack.append(f"'args' values parsing")
                 args.update(
-                    {
-                        k.strip("$"): await self.format_fmt(v, conn, stack, args, True)
-                        for k, v in runner["args"].items()
-                    }
+                    {k.strip("$"): await self.format_fmt(v, conn, stack, args, True) for k, v in runner["args"].items()}
                 )
                 stack.pop()
 
@@ -661,12 +657,15 @@ class ParsingContext:
         }
 
         try:
-            return await typs[arg['type']](self, arg['name'], ctx, view.get_quoted_word() if not is_last else view.read_rest())
+            return await typs[arg["type"]](
+                self, arg["name"], ctx, view.get_quoted_word() if not is_last else view.read_rest()
+            )
         except Exception as e:
-            if arg['optional']:
+            if arg["optional"]:
                 view.undo()
             else:
                 raise ExecutionInterrupt(f"Failed to parse argument {arg['name']}: {e.args[0]}", stack)
+
 
 async def _cmdargs_vars_from_user(_: ParsingContext, name: str, cont: Context, arg: str):
     user = await commands.UserConverter().convert(cont, arg)
@@ -674,8 +673,9 @@ async def _cmdargs_vars_from_user(_: ParsingContext, name: str, cont: Context, a
         f"{name}id": user.id,
         f"{name}name": str(user),
         f"{name}created": f"<t:{int(user.created_at.timestamp())}:F>",
-        f"{name}isbot": user.bot
+        f"{name}isbot": user.bot,
     }
+
 
 async def _cmdargs_vars_from_member(_: ParsingContext, name: str, cont: Context, arg: str):
     user = await commands.MemberConverter().convert(cont, arg)
@@ -685,8 +685,9 @@ async def _cmdargs_vars_from_member(_: ParsingContext, name: str, cont: Context,
         f"{name}created": f"<t:{int(user.created_at.timestamp())}:F>",
         f"{name}isbot": user.bot,
         f"{name}joined": f"<t:{int(user.joined_at.timestamp())}:F>",
-        f"{name}nickname": user.nick
+        f"{name}nickname": user.nick,
     }
+
 
 async def _cmdargs_vars_from_channel(_: ParsingContext, name: str, cont: Context, arg: str):
     chnl = await commands.TextChannelConverter().convert(cont, arg)
@@ -695,8 +696,9 @@ async def _cmdargs_vars_from_channel(_: ParsingContext, name: str, cont: Context
         f"{name}name": chnl.name,
         f"{name}slowmode": chnl.slowmode_delay,
         f"{name}topic": chnl.topic,
-        f"{name}nsfw": chnl.nsfw
+        f"{name}nsfw": chnl.nsfw,
     }
+
 
 async def _cmdargs_vars_from_role(_: ParsingContext, name: str, cont: Context, arg: str):
     role = await commands.RoleConverter().convert(cont, arg)
@@ -705,8 +707,9 @@ async def _cmdargs_vars_from_role(_: ParsingContext, name: str, cont: Context, a
         f"{name}name": role.name,
         f"{name}position": role.position,
         f"{name}colour": role.colour.value,
-        f"{name}hoisted": role.hoist
+        f"{name}hoisted": role.hoist,
     }
+
 
 async def _cmdargs_vars_from_message(_: ParsingContext, name: str, cont: Context, arg: str):
     msg = await commands.MessageConverter().convert(cont, arg)
@@ -717,19 +720,18 @@ async def _cmdargs_vars_from_message(_: ParsingContext, name: str, cont: Context
         f"{name}authorid": msg.author.id,
         f"{name}authorname": str(msg.author),
         f"{name}content": msg.content,
-        f"{name}pinned": msg.pinned
+        f"{name}pinned": msg.pinned,
     }
+
 
 async def _cmdargs_vars_from_int(_: ParsingContext, name: str, __: Context, arg: str):
     d = int(arg)
-    return {
-        name: d
-    }
+    return {name: d}
+
 
 async def _cmdargs_vars_from_str(_: ParsingContext, name: str, __: Context, arg: str):
-    return {
-        name: arg
-    }
+    return {name: arg}
+
 
 # builtins and stuff
 

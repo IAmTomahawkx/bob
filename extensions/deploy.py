@@ -160,7 +160,7 @@ class Config(commands.Cog):
 
                 await conn.execute(
                     "DELETE FROM commands CASCADE WHERE $1 = (SELECT guild_id FROM configs WHERE configs.id = commands.cfg_id)",
-                    ctx.guild.id
+                    ctx.guild.id,
                 )
 
                 refed = list(cfg.counters.keys())
@@ -235,12 +235,14 @@ class Config(commands.Cog):
 
                 for cmd, data in cfg.commands.items():
                     _evens = await self.insert_actions(conn, new_id, [data], event=True)
-                    cid = await conn.fetchval("INSERT INTO commands (cfg_id, name, actions) VALUES ($1, $2, $3) RETURNING id", *_evens[0])
+                    cid = await conn.fetchval(
+                        "INSERT INTO commands (cfg_id, name, actions) VALUES ($1, $2, $3) RETURNING id", *_evens[0]
+                    )
                     await conn.executemany(
                         "INSERT INTO command_arguments (command_id, name, type, optional) VALUES ($1, $2, $3, $4)",
-                        [(cid, x["name"], x["type"], x["optional"]) for x in data['arguments']] or [(cid, "", "", False)]
+                        [(cid, x["name"], x["type"], x["optional"]) for x in data["arguments"]]
+                        or [(cid, "", "", False)],
                     )
-
 
                 step += 1
                 await update_msg()

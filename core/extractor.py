@@ -31,6 +31,7 @@ class ConfigLoadError(Exception):
         self.msg = msg
         super().__init__(msg)
 
+
 def _convert_bool(arg: Any):
     if arg is True or arg is False:
         return arg
