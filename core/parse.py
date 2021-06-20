@@ -715,7 +715,7 @@ async def builtin_user_cases(
 
     query = "SELECT id FROM cases WHERE guild_id = $1 AND user_id = $2"
     data = await conn.fetch(query, ctx.guild.id, user)
-    return ", ".join((x["id"] for x in data))
+    return " ".join((x["id"] for x in data))
 
 
 @_name("pick", 2)
@@ -725,7 +725,7 @@ async def builtin_random(ctx: ParsingContext, conn: asyncpg.Connection, vbls: PA
 
 @_name("now")
 async def builtin_now(*_):
-    return datetime.datetime.utcnow().isoformat()
+    return f"<t:{int(datetime.datetime.utcnow().timestamp())}:F>"
 
 
 @_name("send", 2)
@@ -948,7 +948,7 @@ async def builtin_mute(
         except discord.HTTPException as e:
             return f"cannot mute <@!{user}>:\n{e.args[0]}"
 
-    return f"muted {member}{f' until {duration.isoformat()}' if duration else ''}"
+    return f"muted {member}{f' until {human_timedelta(duration)}' if duration else ''}"
 
 
 @_name("addrole", 2)

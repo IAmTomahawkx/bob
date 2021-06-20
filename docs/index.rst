@@ -18,6 +18,24 @@ Configuring your bot
 
    guide
 
+Reference
+==========
+
+.. toctree::
+   :maxdepth: 2
+
+   config
+   builtins
+
+
+Frequently asked questions
+===========================
+
+.. toctree::
+   :maxdepth: 2
+
+   faq
+
 Indices and tables
 ==================
 

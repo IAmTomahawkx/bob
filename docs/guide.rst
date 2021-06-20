@@ -15,6 +15,7 @@ Core configurations
 
 | The format used for configuration files is `Toml <https://github.com/toml-lang/toml/blob/master/toml.md>`_.
 | Every config needs an error channel, which is where the bot will send parsing errors if your config encounters an error.
+
 We can set one like this:
 
 .. code-block:: toml
@@ -68,7 +69,7 @@ to make a working config:
 
 
 Events
-======
+=======
 
 As described above, events are similar to functions in programming. You can call them from almost wherever.
 Let's define two events, with one calling the other:
