@@ -12,8 +12,9 @@
 #
 import os
 import sys
-sys.path.insert(0, os.path.abspath('.'))
-sys.path.append(os.path.abspath('extensions'))
+
+sys.path.insert(0, os.path.abspath("."))
+sys.path.append(os.path.abspath("extensions"))
 
 
 # -- Project information -----------------------------------------------------
@@ -29,12 +30,12 @@ author = "IAmTomahawkx"
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
 extensions = [
-    'sphinx.ext.autosectionlabel',
-    'sphinx.ext.extlinks',
-    'sphinx.ext.intersphinx',
-    'sphinx.ext.napoleon',
-    'sphinxcontrib_trio',
-    'builder'
+    "sphinx.ext.autosectionlabel",
+    "sphinx.ext.extlinks",
+    "sphinx.ext.intersphinx",
+    "sphinx.ext.napoleon",
+    "sphinxcontrib_trio",
+    "builder",
 ]
 
 # Add any paths that contain templates here, relative to this directory.
@@ -58,11 +59,6 @@ html_theme = "basic"
 # so a file named "default.css" will overwrite the builtin "default.css".
 html_static_path = ["_static"]
 
-html_search_scorer = '_static/scorer.js'
+html_search_scorer = "_static/scorer.js"
 
-html_js_files = [
-  'custom.js',
-  'settings.js',
-  'copy.js',
-  'sidebar.js'
-]
+html_js_files = ["custom.js", "settings.js", "copy.js", "sidebar.js"]
