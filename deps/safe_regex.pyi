@@ -1,0 +1,16 @@
+
+class Re:
+    def find(self, input: str) -> str:
+        ...
+
+    def is_match(self, input: str) -> bool:
+        ...
+
+    def replace(self, input: str, replacer: str) -> str:
+        ...
+
+class CompileError(Exception):
+    ...
+
+def compile(input: str) -> Re:
+    ...

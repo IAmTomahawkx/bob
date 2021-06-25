@@ -18,5 +18,4 @@ pynacl
 viper-lang
 pytz
 ujson
-rure
 git+https://github.com/sethcall/toml.git

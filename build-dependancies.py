@@ -3,9 +3,9 @@ import sys
 import os
 import pathlib
 
-release = "--release" in sys.argv
+release = True
 
-deps = {"lex": "arg_lex"}
+deps = {"lex": "arg_lex", "safe_regex": "safe_regex"}
 
 args = ["cargo", "build"]
 if release:
