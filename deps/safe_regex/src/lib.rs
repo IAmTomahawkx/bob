@@ -8,6 +8,7 @@ use regex::{
     Error,
     RegexBuilder
 };
+use pyo3::types::PyString;
 
 #[pyclass(module="safe_regex")]
 #[derive(Debug)]
@@ -28,6 +29,11 @@ impl Re {
 
 #[pymethods]
 impl Re {
+    #[new]
+    fn pynew(input: &PyString) -> PyResult<Re> {
+        Re::new(input.to_str()?).map_err(|e| CompileError::new_err(e.to_string()))
+    }
+
     #[text_signature = "(input: str)"]
     fn find(&self, input: &str) -> Option<String> {
         let mat = self._re.find(input)?;
@@ -57,12 +63,7 @@ fn module(py: Python, m: &PyModule) -> PyResult<()> {
     #[pyfn(m, "compile")]
     #[text_signature = "(input: str)"]
     fn compile(input: &str) -> PyResult<Re> {
-        let re = Re::new(input);
-        if let Ok(r) = re {
-            Ok(r)
-        } else {
-            Err(CompileError::new_err(re.err().unwrap().to_string()))
-        }
+        Re::new(input).map_err(|e| CompileError::new_err(e.to_string()))
     }
 
     Ok(())

@@ -1,5 +1,8 @@
 
 class Re:
+    def __init__(self, input: str) -> None:
+        ...
+
     def find(self, input: str) -> str:
         ...
 
