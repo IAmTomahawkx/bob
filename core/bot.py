@@ -96,7 +96,7 @@ class Bot(commands.Bot):
         self.add_check(self.ban_check)
 
     def reload_settings(self):
-        with open("settings.json") as f:
+        with open("config.json") as f:
             self.settings = json.load(f)
 
     async def start(self) -> None:  # noqa
