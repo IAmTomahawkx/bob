@@ -684,7 +684,7 @@ async def static_parse(parsable: str, context: str, strict_errors=False) -> List
         "And": _chained,
         "Or": _chained,
         "VarSep": _var_sep,
-        "Regex": _regex
+        "Regex": _regex,
     }
     oprs = {"EQ", "NEQ", "SEQ", "GEQ", "SQ", "GQ"}
     for _token in it:

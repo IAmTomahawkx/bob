@@ -20,10 +20,11 @@ __all__ = (
     "Literal",
     "Whitespace",
     "Re",
-    "VarSep"
+    "VarSep",
 )
 
 PARSE_VARS = Optional[Dict[str, Union[str, int, bool]]]
+
 
 class ExecutionInterrupt(Exception):
     def __init__(self, msg: str, stack: List[str]):
@@ -34,6 +35,7 @@ class ExecutionInterrupt(Exception):
     def __str__(self):
         stack = "\n".join([f"at {x}" for x in self.stack])
         return f"```\n{stack}\n~~~\n{self.msg}\n```"
+
 
 class BaseAst:
     __slots__ = "value", "start", "token", "stack"
@@ -256,6 +258,7 @@ class Whitespace(BaseAst):
     async def access(self, ctx: ParsingContext, vbls: Optional[PARSE_VARS], conn: asyncpg.Connection) -> Any:
         return self.value
 
+
 class Re(BaseAst):
     def __init__(self, t: arg_lex.Token, stack: List[str]):
         super().__init__(t, stack)
@@ -267,6 +270,7 @@ class Re(BaseAst):
 
     async def access(self, ctx: ParsingContext, vbls: Optional[PARSE_VARS], conn: asyncpg.Connection) -> Any:
         return self.value
+
 
 class VarSep:
     pass

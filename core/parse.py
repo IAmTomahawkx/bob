@@ -421,7 +421,8 @@ class ParsingContext:
 
         def no_var_sep(token):
             raise ExecutionInterrupt(
-                f"| {parsable}\n| {' ' * token.start}{'^' * (token.end - token.start)}\n| Unexpected argument continuation", stack
+                f"| {parsable}\n| {' ' * token.start}{'^' * (token.end - token.start)}\n| Unexpected argument continuation",
+                stack,
             )
 
         it = iter(tokens)
@@ -490,8 +491,7 @@ class ParsingContext:
                 )
 
             depth.append(last.args)
-            last = VarSep # bit of a hack, but we'll do it anyways
-
+            last = VarSep  # bit of a hack, but we'll do it anyways
 
         def _pout(token):
             nonlocal depth, last
@@ -561,7 +561,6 @@ class ParsingContext:
 
             last = VarSep
 
-
         def _regex(token):
             nonlocal depth, last
             _last = Re(token, stack)
@@ -586,7 +585,7 @@ class ParsingContext:
             "And": _chained,
             "Or": _chained,
             "VarSep": _var_sep,
-            "Regex": _regex
+            "Regex": _regex,
         }
         oprs = {"EQ", "NEQ", "SEQ", "GEQ", "SQ", "GQ"}
         for _token in it:
@@ -1252,6 +1251,7 @@ async def builtin_first_exists(
     else:
         return t
 
+
 @_name("match", 2)
 async def builtin_match(
     ctx: ParsingContext, conn: asyncpg.Connection, vbls: PARSE_VARS, stack: List[str], args: List[BaseAst]
@@ -1267,9 +1267,10 @@ async def builtin_match(
 
     return comp == come
 
+
 @_name("replace", 3)
 async def builtin_replace(
-        ctx: ParsingContext, conn: asyncpg.Connection, vbls: PARSE_VARS, stack: List[str], args: List[BaseAst]
+    ctx: ParsingContext, conn: asyncpg.Connection, vbls: PARSE_VARS, stack: List[str], args: List[BaseAst]
 ):
     expr = await args[0].access(ctx, vbls, conn)
     inpt = str(await args[1].access(ctx, vbls, conn))
@@ -1282,5 +1283,6 @@ async def builtin_replace(
         return inpt.replace(expr, replace)
 
     raise ExecutionInterrupt(f"Argument 1: expected a pattern or text, not {expr.__class__.__name__}", stack)
+
 
 FROZEN_BUILTINS = set(BUILTINS.keys())
