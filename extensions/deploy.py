@@ -159,7 +159,7 @@ class Config(commands.Cog):
                 )
 
                 await conn.execute(
-                    "DELETE FROM commands CASCADE WHERE $1 = (SELECT guild_id FROM configs WHERE configs.id = commands.cfg_id)",
+                    "DELETE FROM commands WHERE $1 = (SELECT guild_id FROM configs WHERE configs.id = commands.cfg_id)",
                     ctx.guild.id,
                 )
 
@@ -240,7 +240,7 @@ class Config(commands.Cog):
                     )
                     await conn.executemany(
                         "INSERT INTO command_arguments (command_id, name, type, optional) VALUES ($1, $2, $3, $4)",
-                        [(cid, x["name"], x["type"], x["optional"]) for x in data["arguments"]]
+                        [(cid, x["name"], str(x["type"].name), x["optional"]) for x in data["arguments"]]
                         or [(cid, "", "", False)],
                     )
 
