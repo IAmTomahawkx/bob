@@ -3,12 +3,14 @@ from typing import List, Any, Optional, Dict, Union, TYPE_CHECKING
 
 import asyncpg
 
-from deps import arg_lex
+from .models import ConfiguredCounter
+from deps import arg_lex, safe_regex
 
 if TYPE_CHECKING:
     from .parse import ParsingContext
 
 __all__ = (
+    "ExecutionInterrupt",
     "PARSE_VARS",
     "BaseAst",
     "CounterAccess",
@@ -17,10 +19,21 @@ __all__ = (
     "ChainedBiOpExpr",
     "Literal",
     "Whitespace",
+    "Re",
+    "VarSep"
 )
 
 PARSE_VARS = Optional[Dict[str, Union[str, int, bool]]]
 
+class ExecutionInterrupt(Exception):
+    def __init__(self, msg: str, stack: List[str]):
+        self.msg = msg
+        self.stack = stack
+        super().__init__(msg)
+
+    def __str__(self):
+        stack = "\n".join([f"at {x}" for x in self.stack])
+        return f"```\n{stack}\n~~~\n{self.msg}\n```"
 
 class BaseAst:
     __slots__ = "value", "start", "token", "stack"
@@ -43,7 +56,7 @@ class CounterAccess(BaseAst):
         self.args: List[BaseAst] = []
 
     def __repr__(self):
-        return f"<CounterAccess {self.value} args={self.args}>"
+        return f"<CounterAccess value={self.value} args={self.args}>"
 
     async def access(self, ctx: ParsingContext, vbls: Optional[PARSE_VARS], conn: asyncpg.Connection) -> int:
         if self.value not in ctx.counters:
@@ -117,13 +130,16 @@ class VariableAccess(BaseAst):
         self.args: List[BaseAst] = []
 
     def __repr__(self):
-        return f"<VariableAccess {self.value} args={self.args}>"
+        return f"<VariableAccess value={self.value} args={self.args}>"
 
     async def access(
         self, ctx: ParsingContext, vbls: Optional[PARSE_VARS], conn: asyncpg.Connection
     ) -> Union[int, str, bool]:
+        from .parse import FROZEN_BUILTINS, BUILTINS
+
         if self.value in FROZEN_BUILTINS:  # fast lookup
             if len(self.args) < BUILTINS[self.value][1]:
+                print(self.args)
                 raise ExecutionInterrupt(
                     f"| {{input}}\n| {' ' * self.token.start}{'^' * (self.token.end - self.token.start)}\n| "
                     f"Built in '{self.value}' expected at least {BUILTINS[self.value][1]} arguments, got {len(self.args)}",
@@ -150,7 +166,7 @@ class BiOpExpr(BaseAst):
         self.right: Optional[BaseAst] = None
 
     def __repr__(self):
-        return f"<BiOpExpr {self.value} left{self.left} right={self.right}>"
+        return f"<BiOpExpr value={self.value} left={self.left} right={self.right}>"
 
     async def access(self, ctx: ParsingContext, vbls: Optional[PARSE_VARS], conn: asyncpg.Connection) -> bool:
         condl = await self.left.access(ctx, vbls, conn)
@@ -205,7 +221,7 @@ class ChainedBiOpExpr(BaseAst):
         self.right: Optional[BaseAst] = None
 
     def __repr__(self):
-        return f"<ChainedBiOpExpr {self.value} left{self.left} right={self.right}>"
+        return f"<ChainedBiOpExpr value={self.value} left={self.left} right={self.right}>"
 
     async def access(self, ctx: ParsingContext, vbls: Optional[PARSE_VARS], conn: asyncpg.Connection) -> bool:
         condl = await self.left.access(ctx, vbls, conn)
@@ -239,3 +255,18 @@ class Literal(BaseAst):
 class Whitespace(BaseAst):
     async def access(self, ctx: ParsingContext, vbls: Optional[PARSE_VARS], conn: asyncpg.Connection) -> Any:
         return self.value
+
+class Re(BaseAst):
+    def __init__(self, t: arg_lex.Token, stack: List[str]):
+        super().__init__(t, stack)
+        x = t.value[1:-1]
+        self.value = safe_regex.compile(x)
+
+    def __repr__(self):
+        return str(self.value)
+
+    async def access(self, ctx: ParsingContext, vbls: Optional[PARSE_VARS], conn: asyncpg.Connection) -> Any:
+        return self.value
+
+class VarSep:
+    pass

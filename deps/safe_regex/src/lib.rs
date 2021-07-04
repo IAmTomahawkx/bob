@@ -1,7 +1,8 @@
 use pyo3::{
     create_exception,
     exceptions::PyException,
-    prelude::*
+    prelude::*,
+    PyObjectProtocol
 };
 use regex::{
     Regex,
@@ -24,6 +25,13 @@ impl Re {
             .dfa_size_limit(4000)
             .build()?;
         Ok(Re { _re: re })
+    }
+}
+
+#[pyproto]
+impl PyObjectProtocol for Re {
+    fn __repr__(&self) -> String {
+        format!("<Re pattern={}>", self._re.as_str())
     }
 }
 

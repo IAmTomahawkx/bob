@@ -79,6 +79,9 @@ enum Tokenizer {
     #[token(",")]
     VarSep,
 
+    #[regex(r"/(?:\\/|[^/])*/")]
+    Regex,
+
     #[error]
     ERROR
 }
@@ -123,12 +126,13 @@ impl Token {
             Tokenizer::EAnd => "Literal",
             Tokenizer::Or => "Or",
             Tokenizer::And => "And",
+            Tokenizer::Regex => "Regex",
             Tokenizer::Whitespace => "Whitespace",
             Tokenizer::ERROR => "Error"
         }.to_string();
         let start = r.start as u32;
         let end = r.end as u32;
-        let value: String = (&input).slice(r).unwrap().to_string().to_owned();
+        let value: String = (&input).slice(r).unwrap().to_string();
         Token {
             name,
             value,

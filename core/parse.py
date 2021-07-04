@@ -1,5 +1,6 @@
 from __future__ import annotations
 import itertools
+import contextvars
 from typing import Optional, List, Union
 
 import datetime
@@ -11,23 +12,12 @@ import ujson
 from discord.ext import commands
 from discord.ext.commands.view import StringView
 
-from deps import arg_lex
+from deps import arg_lex, safe_regex
 from .models import *
 from .bot import Bot
 from .context import Context
 from .time import ShortTime, human_timedelta
 from .ast import *
-
-
-class ExecutionInterrupt(Exception):
-    def __init__(self, msg: str, stack: List[str]):
-        self.msg = msg
-        self.stack = stack
-        super().__init__(msg)
-
-    def __str__(self):
-        stack = "\n".join([f"at {x}" for x in self.stack])
-        return f"```\n{stack}\n~~~\n{self.msg}\n```"
 
 
 class ParsingContext:
@@ -45,6 +35,9 @@ class ParsingContext:
         self.automod = {}
         self.actions = {}
         self._fetched = False
+
+        self.message = contextvars.ContextVar("message", default=None)
+        self.callerid = contextvars.ContextVar("callerid", default=None)
 
     async def fetch_required_data(self):
         if self._fetched:
@@ -79,7 +72,7 @@ class ParsingContext:
                 type,
                 optional,
                 c.actions,
-                commands_arguments.name as arg_name,
+                command_arguments.name as arg_name,
                 command_arguments.id as arg_id,
                 c.id as cmd_id, 
                 c.name as cmd_name
@@ -98,7 +91,7 @@ class ParsingContext:
                     "args": [
                         {"name": x["arg_name"], "optional": x["optional"], "type": x["type"], "id": x["arg_id"]}
                         for x in rows
-                        if x["name"]
+                        if x["arg_name"]
                     ],  # if it doesnt have args, it inserts a blank named arg
                     "actions": rows[0]["actions"],
                     "id": rows[0]["cmd_id"],
@@ -422,15 +415,37 @@ class ParsingContext:
 
     async def parse_input(self, parsable: str, stack: List[str], strict_errors=True) -> List[BaseAst]:
         tokens = arg_lex.run_lex(parsable)
-        output: List[Union[BiOpExpr, ChainedBiOpExpr, CounterAccess, VariableAccess, Literal]] = []
-        depth: List[Union[CounterAccess, VariableAccess, Literal]] = []  # noqa
-        last = None
+        output: List[Union[BiOpExpr, ChainedBiOpExpr, CounterAccess, VariableAccess, Literal, Re]] = []
+        depth: List[List[BaseAst]] = []  # noqa
+        last: Optional[BaseAst] = None
+
+        def no_var_sep(token):
+            raise ExecutionInterrupt(
+                f"| {parsable}\n| {' ' * token.start}{'^' * (token.end - token.start)}\n| Unexpected argument continuation", stack
+            )
 
         it = iter(tokens)
 
         def _whitespace(token):
-            if not strict_errors and not depth:
-                output.append(Literal(token, stack))
+            nonlocal depth, last
+            if not strict_errors:
+                if not depth:
+                    if isinstance(output[-1], Literal):
+                        output[-1] += token.value
+                        last = None
+                    else:
+                        last = Literal(token, stack)
+                        output.append(last)
+                else:
+                    if last is VarSep:
+                        last = Literal(token, stack)
+                        depth[-1].append(last)
+                    elif isinstance(depth[-1][-1], Literal):
+                        depth[-1][-1] += token.value
+                        last = None
+                    else:
+                        last = Literal(token, stack)
+                        depth[-1].append(last)
 
         def _error(token):
             nonlocal depth, last
@@ -441,14 +456,20 @@ class ParsingContext:
             else:
                 try:
                     if depth:
-                        depth[-1] += token.value
+                        if last is VarSep:
+                            last = Literal(token, stack)
+                            depth[-1].append(last)
+                        else:
+                            depth[-1][-1] += token.value
                     else:
                         output[-1] += token.value
                 except:  # noqa
                     if depth:
-                        depth.append(Literal(token, stack))
+                        last = Literal(token, stack)
+                        depth[-1].append(last)
                     else:
-                        output.append(Literal(token, stack))
+                        last = Literal(token, stack)
+                        output.append(last)
 
         def _pin(token):
             nonlocal depth, last
@@ -456,7 +477,7 @@ class ParsingContext:
                 output[-1].value = output[-1].value.rstrip("\\") + "("
                 return
 
-            if depth and last is depth[-1]:
+            if depth and not depth[-1]:
                 raise ExecutionInterrupt(
                     f"| {parsable}\n| {' '*token.start}{'^'*(token.end-token.start)}\n| Doubled in-parentheses",
                     stack,
@@ -468,7 +489,9 @@ class ParsingContext:
                     stack,
                 )
 
-            depth.append(last)
+            depth.append(last.args)
+            last = VarSep # bit of a hack, but we'll do it anyways
+
 
         def _pout(token):
             nonlocal depth, last
@@ -486,40 +509,71 @@ class ParsingContext:
 
         def _counter(token):
             nonlocal depth, last
-            last = CounterAccess(token, stack)
+            _last = CounterAccess(token, stack)
             if depth:
-                depth[-1].args.append(last)
+                if last is not VarSep:
+                    no_var_sep(token)
+
+                depth[-1].append(_last)
             else:
-                output.append(last)
+                output.append(_last)
+
+            last = _last
 
         def _var(token):
             nonlocal depth, last
-            last = VariableAccess(token, stack)
+            _last = VariableAccess(token, stack)
             if depth:
-                depth[-1].args.append(last)
+                if last is not VarSep:
+                    no_var_sep(token)
+
+                depth[-1].append(_last)
             else:
-                output.append(last)
+                output.append(_last)
+
+            last = _last
 
         def _literal(token):
             nonlocal depth, last
             last = Literal(token, stack)
             if depth:
-                depth[-1].args.append(last)
+                depth[-1].append(last)
             else:
                 output.append(last)
 
         def _chained(token):
             nonlocal depth, last
-            last = ChainedBiOpExpr(token, stack)
+            _last = ChainedBiOpExpr(token, stack)
             if depth:
-                depth[-1].args.append(last)
+                if last is not VarSep:
+                    no_var_sep(token)
+
+                depth[-1].append(_last)
             else:
-                output.append(last)
+                output.append(_last)
+
+            last = _last
 
         def _var_sep(token):
             nonlocal depth, last
             if not depth:
                 _error(token)
+
+            last = VarSep
+
+
+        def _regex(token):
+            nonlocal depth, last
+            _last = Re(token, stack)
+            if depth:
+                if last is not VarSep:
+                    no_var_sep(token)
+
+                depth[-1].append(_last)
+            else:
+                output.append(_last)
+
+            last = _last
 
         typs = {
             "Whitespace": _whitespace,
@@ -532,6 +586,7 @@ class ParsingContext:
             "And": _chained,
             "Or": _chained,
             "VarSep": _var_sep,
+            "Regex": _regex
         }
         oprs = {"EQ", "NEQ", "SEQ", "GEQ", "SQ", "GQ"}
         for _token in it:
@@ -541,65 +596,74 @@ class ParsingContext:
 
             elif _token.name in oprs:
                 if depth:
-                    depth[-1].args.append(BiOpExpr(_token, stack))
+                    depth[-1].append(BiOpExpr(_token, stack))
                 else:
                     output.append(BiOpExpr(_token, stack))
 
-        true_output = []
-        it = iter(enumerate(output))
-        for i, x in it:
-            if isinstance(x, BiOpExpr):
-                if not true_output:
-                    raise ExecutionInterrupt(
-                        f"| {parsable}\n| {' '*x.token.start}{'^'*(x.token.end-x.token.start)}\n| Unexpected comparison here",
-                        stack,
-                    )
+        def recurse_biops(in_):
+            out = []
+            _it = iter(in_)
+            for x in _it:
+                if isinstance(x, BiOpExpr):
+                    if not out:
+                        raise ExecutionInterrupt(
+                            f"| {parsable}\n| {' '*x.token.start}{'^'*(x.token.end-x.token.start)}\n| Unexpected comparison here",
+                            stack,
+                        )
 
-                x.left = true_output.pop()
-                try:
-                    x.right = next(it)[1]  # noqa
-                except StopIteration:
-                    raise ExecutionInterrupt(
-                        f"| {parsable}\n| {' '*x.token.start}{'^'*(x.token.end-x.token.start)}\n| "
-                        "Unexpected comparison here: missing something to compare to\n"
-                        fr"| HINT: If you're not trying to compare something, escape the '{x.value}' like this: '\\{x.value}'",
-                        stack,
-                    )
+                    x.left = out.pop()
+                    try:
+                        x.right = next(_it)
+                    except StopIteration:
+                        raise ExecutionInterrupt(
+                            f"| {parsable}\n| {' '*x.token.start}{'^'*(x.token.end-x.token.start)}\n| "
+                            "Unexpected comparison here: missing something to compare to\n"
+                            fr"| HINT: If you're not trying to compare something, escape the '{x.value}' like this: '\\{x.value}'",
+                            stack,
+                        )
 
-                true_output.append(x)
-                continue
+                    out.append(x)
+                    continue
 
-            elif isinstance(x, (CounterAccess, VariableAccess, Literal, ChainedBiOpExpr)):
-                true_output.append(x)
+                elif isinstance(x, (CounterAccess, VariableAccess, ChainedBiOpExpr)):
+                    out.append(x)
+                    if x.args:
+                        x.args = recurse_biops(x.args)
 
-        output = true_output
-        true_output = []
-        it = iter(enumerate(output))
+                else:
+                    out.append(x)
 
-        # for those wondering, i do two loops here because i need to collect all the BiOpExprs before i can collect the ChainedBiOpExprs
-        for i, x in it:
-            if isinstance(x, ChainedBiOpExpr):
-                if not true_output:
-                    raise ExecutionInterrupt(
-                        f"| {parsable}\n| {' '*x.token.start}{'^'*(x.token.end-x.token.start)}\n| Unexpected '{x.value}' here",
-                        stack,
-                    )
+            outp = []
+            _it = iter(out)
 
-                x.left = true_output.pop()
-                try:
-                    x.right = next(it)[1]  # noqa
-                except StopIteration:
-                    raise ExecutionInterrupt(
-                        f"| {parsable}\n| {' '*x.token.start}{'^'*(x.token.end-x.token.start)}\n| "
-                        "Unexpected chained comparison here: missing something a comparison on the right side\n"
-                        fr"| HINT: If you're not trying to chain something, escape the '{x.value}' like this: '\\{x.value}'",
-                        stack,
-                    )
+            # for those wondering, i do two loops here because i need to collect all the BiOpExprs before i can collect the ChainedBiOpExprs
+            for x in _it:
+                if isinstance(x, ChainedBiOpExpr):
+                    if not outp:
+                        raise ExecutionInterrupt(
+                            f"| {parsable}\n| {' '*x.token.start}{'^'*(x.token.end-x.token.start)}\n| Unexpected '{x.value}' here",
+                            stack,
+                        )
 
-                true_output.append(x)
-                continue
+                    x.left = out.pop()
+                    try:
+                        x.right = next(_it)
+                    except StopIteration:
+                        raise ExecutionInterrupt(
+                            f"| {parsable}\n| {' '*x.token.start}{'^'*(x.token.end-x.token.start)}\n| "
+                            "Unexpected chained comparison here: missing something a comparison on the right side\n"
+                            fr"| HINT: If you're not trying to chain something, escape the '{x.value}' like this: '\\{x.value}'",
+                            stack,
+                        )
 
-            true_output.append(x)
+                    outp.append(x)
+                    continue
+
+                outp.append(x)
+
+            return outp
+
+        true_output = recurse_biops(output)
 
         return true_output
 
@@ -1188,5 +1252,35 @@ async def builtin_first_exists(
     else:
         return t
 
+@_name("match", 2)
+async def builtin_match(
+    ctx: ParsingContext, conn: asyncpg.Connection, vbls: PARSE_VARS, stack: List[str], args: List[BaseAst]
+):
+    comp = await args[0].access(ctx, vbls, conn)
+    come = await args[1].access(ctx, vbls, conn)
+
+    if not isinstance(come, str):
+        raise ExecutionInterrupt(f"Argument 2: expected text, not {come.__class__.__name__}", stack)
+
+    if isinstance(comp, safe_regex.Re):
+        return comp.find(come) is not None
+
+    return comp == come
+
+@_name("replace", 3)
+async def builtin_replace(
+        ctx: ParsingContext, conn: asyncpg.Connection, vbls: PARSE_VARS, stack: List[str], args: List[BaseAst]
+):
+    expr = await args[0].access(ctx, vbls, conn)
+    inpt = str(await args[1].access(ctx, vbls, conn))
+    replace = str(await args[2].access(ctx, vbls, conn))
+
+    if isinstance(expr, safe_regex.Re):
+        return expr.replace(inpt, replace)
+
+    elif isinstance(expr, str):
+        return inpt.replace(expr, replace)
+
+    raise ExecutionInterrupt(f"Argument 1: expected a pattern or text, not {expr.__class__.__name__}", stack)
 
 FROZEN_BUILTINS = set(BUILTINS.keys())

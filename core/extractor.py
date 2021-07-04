@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Union, List, Dict, Any
+from typing import Union, List, Dict, Any, Optional
 
 import re
 import toml
@@ -401,7 +401,7 @@ async def parse_action(action: Dict[str, Any], context: str, n: int) -> Actions:
         )
 
     if "if" in action:
-        parsed = await static_parse(action["if"], context + " (conditional)")
+        parsed = await static_parse(action["if"], context + " (conditional)", strict_errors=True)
         if not all(isinstance(x, (BiOpExpr, ChainedBiOpExpr)) for x in parsed) or 1 < len(parsed) < 1:
             raise ConfigLoadError(f"Failed to parse conditional for action {n} ({context}). " f"Expected a comparison.")
 
@@ -515,30 +515,64 @@ async def resolve_emoji(ctx: Context, arg: Union[str, int], parse_context: str) 
         raise ConfigLoadError(f"The referenced emoji, {arg}, ({parse_context}), is invalid (not found).")
 
 
-async def static_parse(parsable: str, context: str) -> List[BaseAst]:
+async def static_parse(parsable: str, context: str, strict_errors=False) -> List[BaseAst]:
     tokens = arg_lex.run_lex(parsable)
-    output: List[Union[BiOpExpr, ChainedBiOpExpr, CounterAccess, VariableAccess, Literal]] = []
-    depth: List[Union[CounterAccess, VariableAccess, Literal]] = []  # noqa
-    last = None
+    output: List[Union[BiOpExpr, ChainedBiOpExpr, CounterAccess, VariableAccess, Literal, Re]] = []
+    depth: List[List[BaseAst]] = []  # noqa
+    last: Optional[BaseAst] = None
+
+    def no_var_sep(token):
+        raise ConfigLoadError(
+            f"{context}\n| {parsable}\n| {' ' * token.start}{'^' * (token.end - token.start)}\n| Unexpected argument continuation",
+        )
 
     it = iter(tokens)
+    stack = []
 
     def _whitespace(token):
-        if not depth:
-            output.append(Literal(token, []))
+        nonlocal depth, last
+        if not strict_errors:
+            if not depth:
+                if isinstance(output[-1], Literal):
+                    output[-1] += token.value
+                    last = None
+                else:
+                    last = Literal(token, stack)
+                    output.append(last)
+            else:
+                if last is VarSep:
+                    last = Literal(token, stack)
+                    depth[-1].append(last)
+                elif isinstance(depth[-1][-1], Literal):
+                    depth[-1][-1] += token.value
+                    last = None
+                else:
+                    last = Literal(token, stack)
+                    depth[-1].append(last)
 
     def _error(token):
         nonlocal depth, last
-        try:
-            if depth:
-                depth[-1] += token.value
-            else:
-                output[-1] += token.value
-        except:  # noqa
-            if depth:
-                depth.append(Literal(token, []))
-            else:
-                output.append(Literal(token, []))
+        if strict_errors:
+            raise ConfigLoadError(
+                f"{context}\n| {parsable}\n| {' ' * token.start}{'^' * (token.end - token.start)}\n| Unknown token"
+            )
+        else:
+            try:
+                if depth:
+                    if last is VarSep:
+                        last = Literal(token, stack)
+                        depth[-1].append(last)
+                    else:
+                        depth[-1][-1] += token.value
+                else:
+                    output[-1] += token.value
+            except:  # noqa
+                if depth:
+                    last = Literal(token, stack)
+                    depth[-1].append(last)
+                else:
+                    last = Literal(token, stack)
+                    output.append(last)
 
     def _pin(token):
         nonlocal depth, last
@@ -546,7 +580,7 @@ async def static_parse(parsable: str, context: str) -> List[BaseAst]:
             output[-1].value = output[-1].value.rstrip("\\") + "("
             return
 
-        if depth and last is depth[-1]:
+        if depth and not depth[-1]:
             raise ConfigLoadError(
                 f"{context}\n| {parsable}\n| {' '*token.start}{'^'*(token.end-token.start)}\n| Doubled in-parentheses"
             )
@@ -556,7 +590,8 @@ async def static_parse(parsable: str, context: str) -> List[BaseAst]:
                 f"{context}\n| {parsable}\n| {' '*token.start}{'^'*(token.end-token.start)}\n| Unexpected in-parentheses"
             )
 
-        depth.append(last)
+        depth.append(last.args)
+        last = VarSep  # bit of a hack, but we'll do it anyways
 
     def _pout(token):
         nonlocal depth, last
@@ -573,40 +608,70 @@ async def static_parse(parsable: str, context: str) -> List[BaseAst]:
 
     def _counter(token):
         nonlocal depth, last
-        last = CounterAccess(token, [])
+        _last = CounterAccess(token, stack)
         if depth:
-            depth[-1].args.append(last)
+            if last is not VarSep:
+                no_var_sep(token)
+
+            depth[-1].append(_last)
         else:
-            output.append(last)
+            output.append(_last)
+
+        last = _last
 
     def _var(token):
         nonlocal depth, last
-        last = VariableAccess(token, [])
+        _last = VariableAccess(token, stack)
         if depth:
-            depth[-1].args.append(last)
+            if last is not VarSep:
+                no_var_sep(token)
+
+            depth[-1].append(_last)
         else:
-            output.append(last)
+            output.append(_last)
+
+        last = _last
 
     def _literal(token):
         nonlocal depth, last
-        last = Literal(token, [])
+        last = Literal(token, stack)
         if depth:
-            depth[-1].args.append(last)
+            depth[-1].append(last)
         else:
             output.append(last)
 
     def _chained(token):
         nonlocal depth, last
-        last = ChainedBiOpExpr(token, [])
+        _last = ChainedBiOpExpr(token, stack)
         if depth:
-            depth[-1].args.append(last)
+            if last is not VarSep:
+                no_var_sep(token)
+
+            depth[-1].append(_last)
         else:
-            output.append(last)
+            output.append(_last)
+
+        last = _last
 
     def _var_sep(token):
         nonlocal depth, last
         if not depth:
             _error(token)
+
+        last = VarSep
+
+    def _regex(token):
+        nonlocal depth, last
+        _last = Re(token, stack)
+        if depth:
+            if last is not VarSep:
+                no_var_sep(token)
+
+            depth[-1].append(_last)
+        else:
+            output.append(_last)
+
+        last = _last
 
     typs = {
         "Whitespace": _whitespace,
@@ -619,6 +684,7 @@ async def static_parse(parsable: str, context: str) -> List[BaseAst]:
         "And": _chained,
         "Or": _chained,
         "VarSep": _var_sep,
+        "Regex": _regex
     }
     oprs = {"EQ", "NEQ", "SEQ", "GEQ", "SQ", "GQ"}
     for _token in it:
@@ -628,69 +694,68 @@ async def static_parse(parsable: str, context: str) -> List[BaseAst]:
 
         elif _token.name in oprs:
             if depth:
-                depth[-1].args.append(BiOpExpr(_token, []))
+                depth[-1].append(BiOpExpr(_token, stack))
             else:
                 output.append(BiOpExpr(_token, []))
 
-    true_output = []
-    it = iter(enumerate(output))
-    for i, x in it:
-        if isinstance(x, BiOpExpr):
-            if not true_output:
-                raise ConfigLoadError(
-                    f"{context}\n| {parsable}\n| {' '*x.token.start}{'^'*(x.token.end-x.token.start)}\n| Unexpected comparison here"
-                )
+    def recurse_biops(in_):
+        out = []
+        _it = iter(in_)
+        for x in _it:
+            if isinstance(x, BiOpExpr):
+                if not out:
+                    raise ConfigLoadError(
+                        f"{context}\n| {parsable}\n| {' '*x.token.start}{'^'*(x.token.end-x.token.start)}\n| Unexpected comparison here"
+                    )
 
-            x.left = true_output.pop()
-            try:
-                x.right = next(it)[1]  # noqa
-            except StopIteration:
-                raise ConfigLoadError(
-                    f"{context}\n| {parsable}\n| {' '*x.token.start}{'^'*(x.token.end-x.token.start)}\n| "
-                    "Unexpected comparison here: missing something to compare to\n"
-                    fr"| HINT: If you're not trying to compare something, escape the '{x.value}' like this: '\\{x.value}'"
-                )
+                x.left = out.pop()
+                try:
+                    x.right = next(_it)
+                except StopIteration:
+                    raise ConfigLoadError(
+                        f"{context}\n| {parsable}\n| {' '*x.token.start}{'^'*(x.token.end-x.token.start)}\n| "
+                        "Unexpected comparison here: missing something to compare to\n"
+                        fr"| HINT: If you're not trying to compare something, escape the '{x.value}' like this: '\\{x.value}'"
+                    )
 
-            true_output.append(x)
-            continue
+                out.append(x)
+                continue
 
-        elif isinstance(x, ChainedBiOpExpr):
-            true_output.append(x)
+            elif isinstance(x, (CounterAccess, VariableAccess, ChainedBiOpExpr)):
+                out.append(x)
+                if x.args:
+                    x.args = recurse_biops(x.args)
 
-        else:
-            cont = "'" + x.value + "'"
-            raise ConfigLoadError(
-                f"{context}\n| {parsable}\n| {' ' * x.token.start}{'^' * len(x.value)}\n| "
-                f"Unexpected value here\n| "
-                f"HINT: conditionals must be only comparisons. If you meant to compare text, wrap it in quotation marks:\n| "
-                f"{parsable.replace(x.value, cont, 1)}"
-            )
+            else:
+                out.append(x)
 
-    output = true_output
-    true_output = []
-    it = iter(enumerate(output))
+        outp = []
+        _it = iter(out)
 
-    # for those wondering, i do two loops here because i need to collect all the BiOpExprs before i can collect the ChainedBiOpExprs
-    for i, x in it:
-        if isinstance(x, ChainedBiOpExpr):
-            if not true_output:
-                raise ConfigLoadError(
-                    f"{context}\n| {parsable}\n| {' '*x.token.start}{'^'*(x.token.end-x.token.start)}\n| Unexpected '{x.value}' here"
-                )
+        # for those wondering, i do two loops here because i need to collect all the BiOpExprs before i can collect the ChainedBiOpExprs
+        for x in _it:
+            if isinstance(x, ChainedBiOpExpr):
+                if not outp:
+                    raise ConfigLoadError(
+                        f"{context}\n| {parsable}\n| {' '*x.token.start}{'^'*(x.token.end-x.token.start)}\n| Unexpected '{x.value}' here"
+                    )
 
-            x.left = true_output.pop()
-            try:
-                x.right = next(it)[1]  # noqa
-            except StopIteration:
-                raise ConfigLoadError(
-                    f"{context}\n| {parsable}\n| {' '*x.token.start}{'^'*(x.token.end-x.token.start)}\n| "
-                    "Unexpected chained comparison here: missing something a comparison on the right side\n"
-                    fr"| HINT: If you're not trying to chain something, escape the '{x.value}' like this: '\\{x.value}'"
-                )
+                x.left = out.pop()
+                try:
+                    x.right = next(_it)
+                except StopIteration:
+                    raise ConfigLoadError(
+                        f"{context}\n| {parsable}\n| {' '*x.token.start}{'^'*(x.token.end-x.token.start)}\n| "
+                        "Unexpected chained comparison here: missing something a comparison on the right side\n"
+                        fr"| HINT: If you're not trying to chain something, escape the '{x.value}' like this: '\\{x.value}'"
+                    )
 
-            true_output.append(x)
-            continue
+                outp.append(x)
+                continue
 
-        true_output.append(x)
+            outp.append(x)
 
+        return outp
+
+    true_output = recurse_biops(output)
     return true_output
