@@ -1,4 +1,6 @@
 import asyncio
+import contextvars
+
 import asyncpg
 import discord
 import itertools
@@ -128,7 +130,8 @@ class Dispatch(commands.Cog):
             ctx = self.ctx_cache[guild.id] = parse.ParsingContext(self.bot, guild)
 
         print(event)
-        kwargs["__callerid__"] = self.bot.user.id
+        ctx.message.set(message)
+        ctx.callerid.set(self.bot.user.id)
 
         try:
             await ctx.run_automod(event, conn, None, kwargs, messageable=message.channel)
