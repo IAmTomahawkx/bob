@@ -113,11 +113,12 @@ class Timers(commands.Cog):
     @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member):
         roles = await self.bot.db.fetch(
-            "SELECT role_id FROM persist_roles WHERE guild_id = $1 AND user_id = $2",
-            member.guild.id, member.id
+            "SELECT role_id FROM persist_roles WHERE guild_id = $1 AND user_id = $2", member.guild.id, member.id
         )
         if roles:
             try:
-                await member.add_roles(*tuple(discord.Object(x['role_id']) for x in roles), atomic=True, reason="Role persistence")
+                await member.add_roles(
+                    *tuple(discord.Object(x["role_id"]) for x in roles), atomic=True, reason="Role persistence"
+                )
             except discord.HTTPException:
                 pass
