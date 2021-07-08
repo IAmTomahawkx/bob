@@ -517,7 +517,7 @@ async def resolve_emoji(ctx: Context, arg: Union[str, int], parse_context: str) 
 
 async def static_parse(parsable: str, context: str, strict_errors=False) -> List[BaseAst]:
     tokens = arg_lex.run_lex(parsable)
-    output: List[Union[BiOpExpr, ChainedBiOpExpr, CounterAccess, VariableAccess, Literal, Re]] = []
+    output: List[BaseAst] = []
     depth: List[List[BaseAst]] = []  # noqa
     last: Optional[BaseAst] = None
 
@@ -673,6 +673,19 @@ async def static_parse(parsable: str, context: str, strict_errors=False) -> List
 
         last = _last
 
+    def _bool(token):
+        nonlocal depth, last
+        _last = Bool(token, stack)
+        if depth:
+            if last is not VarSep:
+                no_var_sep(token)
+
+            depth[-1].append(_last)
+        else:
+            output.append(_last)
+
+        last = _last
+
     typs = {
         "Whitespace": _whitespace,
         "Var": _var,
@@ -683,6 +696,7 @@ async def static_parse(parsable: str, context: str, strict_errors=False) -> List
         "Error": _error,
         "And": _chained,
         "Or": _chained,
+        "Bool": _bool,
         "VarSep": _var_sep,
         "Regex": _regex,
     }
