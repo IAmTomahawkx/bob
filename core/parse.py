@@ -1226,8 +1226,7 @@ async def builtin_give_role(
 
     if persist:
         await conn.execute(
-            "INSERT INTO persist_roles VALUES ($1, $2, $3) ON CONFLICT DO NOTHING",
-            ctx.guild.id, member.id, role.id
+            "INSERT INTO persist_roles VALUES ($1, $2, $3) ON CONFLICT DO NOTHING", ctx.guild.id, member.id, role.id
         )
 
     try:
@@ -1257,8 +1256,7 @@ async def builtin_remove_role(
         return
 
     await conn.execute(
-        "DELETE FROM persist_roles WHERE guild_id = $1 AND user_id = $2 AND role_id = $3",
-        ctx.guild.id, member.id, r.id
+        "DELETE FROM persist_roles WHERE guild_id = $1 AND user_id = $2 AND role_id = $3", ctx.guild.id, member.id, r.id
     )
 
     try:
