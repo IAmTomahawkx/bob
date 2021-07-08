@@ -126,6 +126,5 @@ class Timers(commands.Cog):
     @commands.Cog.listener()
     async def on_role_remove(self, role: discord.Role):
         await self.bot.db.execute(
-            "DELETE FROM persist_roles WHERE guild_id = $1 AND role_id = $2",
-            role.guild.id, role.id
+            "DELETE FROM persist_roles WHERE guild_id = $1 AND role_id = $2", role.guild.id, role.id
         )
