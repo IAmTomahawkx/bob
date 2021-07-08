@@ -20,7 +20,7 @@ Arguments
 
 Returns
 ++++++++
-``(int)`` The case number of the newly created case
+``(number)`` The case number of the newly created case
 
 
 $editcase
@@ -36,7 +36,7 @@ Arguments
 
 Returns
 ++++++++
-``(int)`` The case number of the edited case
+``(number)`` The case number of the edited case
 
 
 $usercases
@@ -113,15 +113,97 @@ Kicks a user from the server, creates a case, and dispatches the appropriate eve
 
 Arguments
 ++++++++++
-| 1: ``(number)`` The :ref:`ID<faq_userid>` of the user to mute
-| 2: ``(text)`` [OPTIONAL] The reason for the mute
-| 3: ``(text)`` [OPTIONAL] The duration to mute for. This can be in a time form ("for two days"), or a more concrete form ("saturday at 11 pm"). Times are in UTC
+| 1: ``(number)`` The :ref:`ID<faq_userid>` of the user to kick
+| 2: ``(text)`` [OPTIONAL] The reason for the kick
 
 Returns
 ++++++++
-``(text)`` A nicely formatted string: ``Muted User#0000``, or ``Muted User#0000 for 2 hours`` if a duration is provided
+``(text)`` A nicely formatted string: ``Kicked User#0000``
 
+$ban
+-------
+Bans a user from the server, creates a case, and dispatches the approprate events and automod actions
 
+Arguments
+++++++++++
+| 1. ``(number)`` The :ref:`ID<faq_userid>` of the user to ban
+| 2. ``(text)`` [OPTIONAl] The reason for the ban
+| 3. ``(text)`` [OPTIONAL] The duration the ban should be. It will automatically be lifted after this time. Could be formatted like "3h" or "until january"
+
+Returns
+++++++++
+``(text)`` A nicely formatted string: ``Banned User#0000``, or ``Banned User#0000 for 2 hours`` if a duration is provided
+
+$addrole
+---------
+Adds a role to a member.
+
+Arguments
+++++++++++
+| 1. ``(number)`` The :ref:`ID<faq_userid>` of the user to add the role to
+| 2. ``(number)`` The :ref:`ID<faq_roleid>` of the role to add
+| 3. ``(true/false)`` [OPTIONAL] Whether or not to persist the role if the user leaves and re-joins the server. Defaults to ``false``
+
+Returns
+++++++++
+Nothing
+
+$removerole
+------------
+Removes a role from a member. This will remove persistence (The role will no longer be added if the user re-joins the server)
+
+Arguments
+++++++++++
+| 1. ``(number)`` The :ref:`ID<faq_userid>` of the user to remove the role from
+| 2. ``(number)`` The :ref:`ID<faq_roleid>` of the role to remove
+
+Returns
+++++++++
+Nothing
+
+$coalesce
+----------
+A special function that takes any amount of arguments, and returns the first one that exists as a variable.
+For example: ``$coalesce('user', 'userid')`` will return the value for ``user`` if a variable called ``user`` exists,
+otherwise it will return the value for ``userid``, assuming it exists as well. If none of the given arguments exist,
+it will return nothing.
+
+Arguments
+++++++++++
+Any amount, all should be quoted text
+
+Returns
+++++++++
+Could return anything
+
+$match
+-------
+Checks if the first argument matches the second argument. If the first argument is a regex, the text will be searched
+with the regex, otherwise the second argument must match the first one exactly.
+
+Arguments
+++++++++++
+| 1. ``(text or regex)`` The text to match against the second argument. For more info on how to use regex, :ref:`Click Here<guide_regex>`
+| 2. ``(text)`` The text to be searched.
+
+Returns
+++++++++
+``(true/false)`` returns true if the text matched the first argument, otherwise returns false
+
+$replace
+---------
+Replaces a snippet of text with another snippet.
+For example: ``$replace('hello', 'hey hello hi', 'hi')`` would result in ``'hey hi hi'``.
+
+Arguments
+++++++++++
+| 1. ``(text or regex)`` Where to replace in the input text. For more info on how to use regex, :ref:`Click Here<guide_regex>`
+| 2. ``(text)`` The input text
+| 3. ``(text)`` What to replace the target text with
+
+Returns
+++++++++
+``(text)`` The input text with the text replaced
 
 .. _builtin_caseactions:
 

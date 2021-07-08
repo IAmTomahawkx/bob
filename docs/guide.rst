@@ -151,3 +151,9 @@ Counters
 
 Let's say we want to track how many w
 
+
+.. _guide_regex:
+
+Regex
+======
+todo

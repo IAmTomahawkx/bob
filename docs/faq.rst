@@ -9,4 +9,10 @@ This is a list of frequently asked questions, and their answers.
 
 How to get a user ID
 ---------------------
-a
+todo
+
+.. _faq_roleid:
+
+How to get a role ID
+---------------------
+todo
