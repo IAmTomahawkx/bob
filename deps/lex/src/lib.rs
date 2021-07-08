@@ -22,55 +22,45 @@ enum Tokenizer {
 
     #[token("(")]
     PIn,
-    #[token("\\(")]
-    EPIn,
 
     #[token(")")]
     POut,
-    #[token("\\)")]
-    EPOut,
 
     #[token("==")]
     EQ,
-    #[token("\\==")]
-    EEQ,
 
     #[token("!=")]
     NEQ,
-    #[token("\\!=")]
-    ENEQ,
 
     #[token(">=")]
     GEQ,
-    #[token("\\>=")]
-    EGEQ,
 
     #[token("<=")]
     SEQ,
-    #[token("\\<=")]
-    ESEQ,
 
     #[token("<")]
     SQ,
-    #[token("\\<")]
-    ESQ,
 
     #[token(">")]
     GQ,
-    #[token("\\>")]
-    EGQ,
 
     #[token("||")]
     Or,
-    #[token("\\||")]
-    EOr,
 
     #[token("&&")]
     And,
-    #[token("\\&&")]
-    EAnd,
 
     #[regex(r"[0-9]+|'(?:\\'|[^'])*'")]
+    #[token("\\>")]
+    #[token("\\<")]
+    #[token("\\<=")]
+    #[token("\\>=")]
+    #[token("\\!=")]
+    #[token("\\==")]
+    #[token("\\)")]
+    #[token("\\(")]
+    #[token("\\||")]
+    #[token("\\&&")]
     Literal,
 
     #[regex(r"[ \t\n\f]+")]
@@ -81,6 +71,12 @@ enum Tokenizer {
 
     #[regex(r"/(?:\\/|[^/])*/")]
     Regex,
+
+    #[token("true")]
+    #[token("True")]
+    #[token("false")]
+    #[token("False")]
+    Bool,
 
     #[error]
     ERROR
@@ -114,20 +110,11 @@ impl Token {
             Tokenizer::GQ => "GQ",
             Tokenizer::VarSep => "VarSep",
             Tokenizer::Literal => "Literal",
-            Tokenizer::EPIn => "Literal",
-            Tokenizer::EPOut => "Literal",
-            Tokenizer::EEQ => "Literal",
-            Tokenizer::ENEQ => "Literal",
-            Tokenizer::EGEQ => "Literal",
-            Tokenizer::ESEQ => "Literal",
-            Tokenizer::ESQ => "Literal",
-            Tokenizer::EGQ => "Literal",
-            Tokenizer::EOr => "Literal",
-            Tokenizer::EAnd => "Literal",
             Tokenizer::Or => "Or",
             Tokenizer::And => "And",
             Tokenizer::Regex => "Regex",
             Tokenizer::Whitespace => "Whitespace",
+            Tokenizer::Bool => "Bool",
             Tokenizer::ERROR => "Error"
         }.to_string();
         let start = r.start as u32;
