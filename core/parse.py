@@ -1219,7 +1219,7 @@ async def builtin_give_role(
     if len(args) > 2:
         persist = await args[2].access(ctx, vbls, conn)
         if not isinstance(persist, bool):
-            raise ExecutionInterrupt(f"Argument 3: expected a true or false value, not `{persist}`")
+            raise ExecutionInterrupt(f"Argument 3: expected a true or false value, not `{persist}`", stack)
 
     if role in member.roles:  # at worst this is like 250 iterations
         return
