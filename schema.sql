@@ -148,3 +148,10 @@ CREATE TABLE IF NOT EXISTS selfroles_roles
     interaction_cid TEXT,
     reaction TEXT
 );
+CREATE TABLE IF NOT EXISTS persist_roles
+(
+    guild_id BIGINT NOT NULL,
+    user_id BIGINT NOT NULL,
+    role_id BIGINT NOT NULL,
+    PRIMARY KEY (guild_id, user_id, role_id)
+)

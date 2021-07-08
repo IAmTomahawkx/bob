@@ -415,7 +415,7 @@ class ParsingContext:
 
     async def parse_input(self, parsable: str, stack: List[str], strict_errors=True) -> List[BaseAst]:
         tokens = arg_lex.run_lex(parsable)
-        output: List[Union[BiOpExpr, ChainedBiOpExpr, CounterAccess, VariableAccess, Literal, Re]] = []
+        output: List[Union[BaseAst]] = []
         depth: List[List[BaseAst]] = []  # noqa
         last: Optional[BaseAst] = None
 
@@ -520,6 +520,19 @@ class ParsingContext:
 
             last = _last
 
+        def _bool(token):
+            nonlocal depth, last
+            _last = Bool(token, stack)
+            if depth:
+                if last is not VarSep:
+                    no_var_sep(token)
+
+                depth[-1].append(_last)
+            else:
+                output.append(_last)
+
+            last = _last
+
         def _var(token):
             nonlocal depth, last
             _last = VariableAccess(token, stack)
@@ -584,6 +597,7 @@ class ParsingContext:
             "Error": _error,
             "And": _chained,
             "Or": _chained,
+            "Bool": _bool,
             "VarSep": _var_sep,
             "Regex": _regex,
         }
@@ -1192,28 +1206,38 @@ async def builtin_give_role(
     if not member:
         raise ExecutionInterrupt(f"Argument 1: the given member id is invalid", stack)
 
-    role = await args[1].access(ctx, vbls, conn)
-    if not isinstance(role, int):
-        raise ExecutionInterrupt(f"Argument 2: expected a role id, got {user.__class__.__name__}", stack)
+    role = await resolve_role(ctx, args[1], vbls, conn, stack)
 
-    r = ctx.guild.get_role(role)
-    if not r:
+    if not role:
         raise ExecutionInterrupt(f"Argument 2: the given role id is invalid", stack)
 
-    if r.position <= ctx.guild.me.top_role.position:
+    if role.position <= ctx.guild.me.top_role.position:
         return
 
-    if r in member.roles:  # at worst this is like 250 iterations
+    persist = False
+
+    if len(args) > 2:
+        persist = await args[2].access(ctx, vbls, conn)
+        if not isinstance(persist, bool):
+            raise ExecutionInterrupt(f"Argument 3: expected a true or false value, not `{persist}`")
+
+    if role in member.roles:  # at worst this is like 250 iterations
         return
+
+    if persist:
+        await conn.execute(
+            "INSERT INTO persist_roles VALUES ($1, $2, $3) ON CONFLICT DO NOTHING",
+            ctx.guild.id, member.id, role.id
+        )
 
     try:
-        await member.add_roles(r)
+        await member.add_roles(role)
     except discord.HTTPException:
         pass
 
 
 @_name("removerole", 2)
-async def builtin_give_role(
+async def builtin_remove_role(
     ctx: ParsingContext, conn: asyncpg.Connection, vbls: PARSE_VARS, stack: List[str], args: List[BaseAst]
 ):
     user = await args[0].access(ctx, vbls, conn)
@@ -1231,6 +1255,11 @@ async def builtin_give_role(
 
     if r not in member.roles:  # at worst this is like 250 iterations
         return
+
+    await conn.execute(
+        "DELETE FROM persist_roles WHERE guild_id = $1 AND user_id = $2 AND role_id = $3",
+        ctx.guild.id, member.id, r.id
+    )
 
     try:
         await member.remove_roles(r)
