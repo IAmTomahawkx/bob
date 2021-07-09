@@ -5,7 +5,7 @@
 [![discord](https://discord.com/api/guilds/604085864514977813/embed.png)](https://discord.gg/wcVHh4h)
 
 ___
-<div align="center" style="font-size: 30px">
+<div align="center" style="font-size: 70px">
 <strong>
 Bob
 </strong>
