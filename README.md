@@ -6,12 +6,10 @@
 
 ___
 <h1 align="center">
-BOB
+Bob
 </h1>
 <p align="center">
-<sup>
 An extremely flexible discord moderation bot
-</sup>
 </p>
 
 ___
@@ -20,7 +18,7 @@ Want to create a spam filter? No problem. Want to mute people who say slurs? Eas
 Want to create a system completely customized to your discord server? Go right on ahead.\
 Bob puts the controls in your hands, and lets you define what happens when,
 through powerful TOML configuration.
-For example; a simple spam filter:
+For example: a simple spam filter
 
 ```toml
 error-channel = "#errors"
@@ -40,7 +38,7 @@ actions = [
 ]
 ```
 
-Upload this to bob, and you're now muting people who send more than 5 messages in a 5-second period.
+Upload this to Bob, and you're now muting people who send more than 5 messages in a 5-second period.
 
 Bob allows you to preform actions on every event (... that discord provides.
 Before you ask, no, discord doesn't provide boost events) in your server.
