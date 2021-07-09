@@ -5,11 +5,9 @@
 [![discord](https://discord.com/api/guilds/604085864514977813/embed.png)](https://discord.gg/wcVHh4h)
 
 ___
-<div align="center" style="font-size: 70px">
-<strong>
+<h1 align="center">
 Bob
-</strong>
-</div>
+</h1>
 <div align="center">
 An extremely flexible discord moderation bot
 </div>
