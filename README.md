@@ -5,12 +5,14 @@
 [![discord](https://discord.com/api/guilds/604085864514977813/embed.png)](https://discord.gg/wcVHh4h)
 
 ___
-<h1 align="center">
+<div align="center" style="font-size: 30px">
+<strong>
 Bob
-</h1>
-<p align="center">
+</strong>
+</div>
+<div align="center">
 An extremely flexible discord moderation bot
-</p>
+</div>
 
 ___
 
