@@ -91,7 +91,7 @@ class Timers(commands.Cog):
 
     # this handles the counter decays
 
-    @tasks.loop(seconds=30)
+    @tasks.loop(seconds=5)
     async def run_decay(self):
         query = """
         UPDATE counter_values
