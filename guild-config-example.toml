@@ -21,6 +21,11 @@ opt-out = false
 mode = "reaction"
 message = "https://canary.discord.com/channels/604085864514977813/604116058407829506/849413621485404190"
 
+[[group]]
+name = "mods"
+roles = [ "Moderators", 604116331356487680 ]
+members = [ "IAmTomahawkx#1000", 828434317461815327 ]
+
 [[counter]]
 name = "warnings"
 per-user = true
@@ -68,6 +73,7 @@ format.history-join = "$target has joined. They have more than 5 previous cases"
 
 [[command]]
 name = "warn"
+group = "mods"
 arguments = [
     { name = "target", type = "user" },
     { name = "reason", type = "text" } # last argument will always get the full remaining text
