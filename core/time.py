@@ -163,8 +163,6 @@ class UserFriendlyTime(commands.Converter):
             raise commands.BadArgument("This time is in the past.")
 
         if not remaining:
-            if self.default is None:
-                raise commands.BadArgument("Missing argument after the time.")
             remaining = self.default
 
         if self.converter is not None:
