@@ -485,7 +485,7 @@ class Dispatch(commands.Cog):
                 if member.avatar.is_animated()
                 else member.avatar.with_format("png").url,
                 "usergatepending": member.pending,
-                "userstatus": member.status.name, # noqa
+                "userstatus": member.status.name,  # noqa
                 "usercreatedat": member.created_at,
                 "usernick": member.nick,
             }

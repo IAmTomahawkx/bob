@@ -1,4 +1,3 @@
-
 class BaseHelper:
     __slots__ = ("optional", "name")
     description: str
@@ -16,8 +15,9 @@ class BaseHelper:
     def long(self) -> str:
         raise NotImplementedError
 
+
 class Text(BaseHelper):
-    description = "A word of text. To include multiple words in this argument, wrap your words in quotes, \"like this\"."
+    description = 'A word of text. To include multiple words in this argument, wrap your words in quotes, "like this".'
     example = "Hi"
 
     @property
@@ -34,8 +34,11 @@ class Text(BaseHelper):
 
         return f"{self.name}: Text"
 
+
 class RemainderText(BaseHelper):
-    description = "The rest of the command input. There is no need to quote words to have multiple of them in the argument."
+    description = (
+        "The rest of the command input. There is no need to quote words to have multiple of them in the argument."
+    )
     example = "Oh hello there"
 
     @property
@@ -52,8 +55,9 @@ class RemainderText(BaseHelper):
 
         return f"{self.name}: Text"
 
+
 class Timestamp(BaseHelper):
-    description = "The time this is applicable until. This can be an offset (\"2 hours\") or a more concrete time (\"until saturday\")"
+    description = 'The time this is applicable until. This can be an offset ("2 hours") or a more concrete time ("until saturday")'
     example = "until january first"
 
     @property
@@ -62,6 +66,7 @@ class Timestamp(BaseHelper):
             return "[Timestamp]"
 
         return "Timestamp"
+
 
 class Number(BaseHelper):
     description = "A number (not a decimal)"
@@ -80,6 +85,7 @@ class Number(BaseHelper):
             return f"[{self.name}: Channel(s)]"
 
         return f"{self.name}: Channel(s)"
+
 
 class Member(BaseHelper):
     description = "A member of the server. You can ping them, use their name, or their id as the argument."
@@ -118,6 +124,7 @@ class GreedyMember(BaseHelper):
 
         return f"{self.name}: Member(s)"
 
+
 class Channel(BaseHelper):
     description = "A channel in the server. This can take a channel name, a mention, or an id as the argument."
     example = "#bot-usage"
@@ -135,6 +142,7 @@ class Channel(BaseHelper):
             return f"[{self.name}: Channel]"
 
         return f"{self.name}: Channel"
+
 
 class GreedyChannel(BaseHelper):
     description = "Multiple channels in the server. Can take channel names, mentions, or ids."
@@ -154,6 +162,7 @@ class GreedyChannel(BaseHelper):
 
         return f"{self.name}: Channel(s)"
 
+
 class Role(BaseHelper):
     description = "A role in the server. This can take a role name, a mention, or an id as the argument."
     example = "@Mods"
@@ -171,6 +180,7 @@ class Role(BaseHelper):
             return f"[{self.name}: Role]"
 
         return f"{self.name}: Role"
+
 
 class GreedyRole(BaseHelper):
     description = "Multiple roles in the server. Can take role names, mentions, or ids."
@@ -190,6 +200,7 @@ class GreedyRole(BaseHelper):
 
         return f"{self.name}: Role(s)"
 
+
 class User(BaseHelper):
     description = "A user on discord. This should be in the form of a user id, as the user might not be in the server (read: name not available to the bot)."
     example = "80088516616269824"
@@ -208,6 +219,7 @@ class User(BaseHelper):
 
         return f"{self.name}: User"
 
+
 class GreedyUser(BaseHelper):
     description = "Multiple users on discord. This should be in the form of user ids, as the user might not be in the server (read: name not available to the bot)."
     example = "80088516616269824 184385816066392064"
@@ -225,4 +237,3 @@ class GreedyUser(BaseHelper):
             return f"[{self.name}: User(s)]"
 
         return f"{self.name}: User(s)"
-

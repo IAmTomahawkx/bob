@@ -14,8 +14,10 @@ if TYPE_CHECKING:
 
 MSGDAYS_RE = re.compile("(?:--delete-message-days|--dmd|--del)\s+(\d)")
 
+
 def setup(bot: Bot):
     bot.add_cog(Moderation(bot))
+
 
 class Moderation(commands.Cog):
     def __init__(self, bot: Bot):
@@ -28,13 +30,12 @@ class Moderation(commands.Cog):
 
         await dispatch.filled.wait()
 
-        if event in dispatch.cached_triggers['automod'][ctx.guild.id]:
-            kwargs['__callerid__'] = ctx.author.id
+        if event in dispatch.cached_triggers["automod"][ctx.guild.id]:
+            kwargs["__callerid__"] = ctx.author.id
             await dispatch.fire_event_dispatch(event, ctx.guild, kwargs, conn, ctx.message)
 
     @commands.command(
-        name = "warn",
-        usage = [helping.GreedyMember("Target(s)", False), helping.RemainderText("Reason", True)]
+        name="warn", usage=[helping.GreedyMember("Target(s)", False), helping.RemainderText("Reason", True)]
     )
     @commands.guild_only()
     async def warn(self, ctx: Context, users: commands.Greedy[discord.Member], *, reason: str):
@@ -61,11 +62,13 @@ class Moderation(commands.Cog):
                     "userid": user.id,
                     "modname": str(ctx.author),
                     "modid": ctx.author.id,
-                    "reason": reason
+                    "reason": reason,
                 }
                 await self.dispatch_automod(ctx, "warn", conn, context)
 
-                resp = await conn.fetchval(query, ctx.guild.id, user.id, ctx.author.id, "warn", reason, ctx.message.jump_url)
+                resp = await conn.fetchval(
+                    query, ctx.guild.id, user.id, ctx.author.id, "warn", reason, ctx.message.jump_url
+                )
                 context = {
                     "caseid": resp,
                     "casereason": reason,
@@ -73,13 +76,13 @@ class Moderation(commands.Cog):
                     "casemodid": ctx.author.id,
                     "casemodname": str(ctx.author),
                     "caseuserid": user.id,
-                    "caseusername": str(user)
+                    "caseusername": str(user),
                 }
                 await self.dispatch_automod(ctx, "case", conn, context)
 
         try:
             await ctx.message.add_reaction("\U0001f44d")
-        except discord.HTTPException: # in case we're blocked or something funky
+        except discord.HTTPException:  # in case we're blocked or something funky
             pass
 
         if len(users) > 1:
@@ -88,12 +91,18 @@ class Moderation(commands.Cog):
             await ctx.reply(f"Warned {users[0]}", mention_author=False, delete_after=5)
 
     @commands.command(
-        name = "ban",
-        usage = [helping.GreedyUser("Target(s)", False), helping.Timestamp("Ban Until", True), helping.RemainderText("Reason", True)]
+        name="ban",
+        usage=[
+            helping.GreedyUser("Target(s)", False),
+            helping.Timestamp("Ban Until", True),
+            helping.RemainderText("Reason", True),
+        ],
     )
     @commands.guild_only()
     @commands.bot_has_guild_permissions(ban_members=True)
-    async def ban(self, ctx: Context, users: commands.Greedy[discord.Member], *, timestamp: time.UserFriendlyTime = None):
+    async def ban(
+        self, ctx: Context, users: commands.Greedy[discord.Member], *, timestamp: time.UserFriendlyTime = None
+    ):
         """
         Bans user(s) from the server, creating a case for each one. Optionally will create a timer to unban them
 
@@ -119,7 +128,7 @@ class Moderation(commands.Cog):
                     return ctx.reply(
                         f"The delete message days flag value must be between 0 and 7 (including 0/7)",
                         delete_message_after=10,
-                        mention_author=False
+                        mention_author=False,
                     )
 
                 reason = reason.replace(dmd.string, "", 1)
@@ -150,13 +159,16 @@ class Moderation(commands.Cog):
                     if not timers:
                         await ctx.send("Failed to schedule the unban timer! Please report this error")
 
-                    await timers.schedule_task("ban_complete", timestamp.dt, conn=conn, guild_id=ctx.guild.id, user_id=user.id)
+                    await timers.schedule_task(
+                        "ban_complete", timestamp.dt, conn=conn, guild_id=ctx.guild.id, user_id=user.id
+                    )
 
                 # we don't dispatch the ban event here because that will be dispatched by the user_ban handler
                 # when the event is received
 
-                resp = await conn.fetchval(query, ctx.guild.id, user.id, ctx.author.id, "ban", reason,
-                                           ctx.message.jump_url)
+                resp = await conn.fetchval(
+                    query, ctx.guild.id, user.id, ctx.author.id, "ban", reason, ctx.message.jump_url
+                )
                 context = {
                     "caseid": resp,
                     "casereason": reason,
@@ -164,7 +176,7 @@ class Moderation(commands.Cog):
                     "casemodid": ctx.author.id,
                     "casemodname": str(ctx.author),
                     "caseuserid": user.id,
-                    "caseusername": str(user)
+                    "caseusername": str(user),
                 }
                 await self.dispatch_automod(ctx, "case", conn, context)
 
@@ -175,8 +187,10 @@ class Moderation(commands.Cog):
                 pass
 
             if len(users) > 1:
-                await ctx.reply(f"Banned {len(users)-len(fails)} users.\nFailed to ban the following users:\n{' '.join(x.mention for x in fails)}",
-                                mention_author=False)
+                await ctx.reply(
+                    f"Banned {len(users)-len(fails)} users.\nFailed to ban the following users:\n{' '.join(x.mention for x in fails)}",
+                    mention_author=False,
+                )
             else:
                 await ctx.reply(f"Could not ban {users[0]}", mention_author=False)
 
@@ -192,8 +206,7 @@ class Moderation(commands.Cog):
                 await ctx.reply(f"Banned {users[0]}", mention_author=False, delete_after=5)
 
     @commands.command(
-        name = "kick",
-        usage = [helping.GreedyMember("Target(s)", False), helping.RemainderText("Reason", True)]
+        name="kick", usage=[helping.GreedyMember("Target(s)", False), helping.RemainderText("Reason", True)]
     )
     @commands.guild_only()
     @commands.bot_has_guild_permissions(kick_members=True)
@@ -201,15 +214,19 @@ class Moderation(commands.Cog):
         pass
 
     @commands.command(
-        name = "massban",
+        name="massban",
         # TODO: gotta figure out how to document flags
     )
-    async def massban(self, ctx: Context): # TODO: massban args
+    async def massban(self, ctx: Context):  # TODO: massban args
         pass
 
     @commands.command(
-        name = "mute",
-        usage = [helping.GreedyMember("Target(s)", False), helping.Timestamp("Mute Until", True), helping.RemainderText("Reason", True)]
+        name="mute",
+        usage=[
+            helping.GreedyMember("Target(s)", False),
+            helping.Timestamp("Mute Until", True),
+            helping.RemainderText("Reason", True),
+        ],
     )
     @commands.bot_has_permissions(manage_roles=True)
     @commands.guild_only()
