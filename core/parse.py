@@ -46,6 +46,11 @@ class ParsingContext:
         async with self.bot.db.acquire() as conn:
             query = "SELECT id, error_channel, mute_role FROM configs WHERE guild_id = $1 ORDER BY id DESC LIMIT 1"
             data = await conn.fetchrow(query, self.guild.id)
+
+            if not data:
+                self._fetched = True
+                return
+
             cfg_id = self._cfg_id = data["id"]
             self.error_channel = data["error_channel"]
             self.mute_role = data["mute_role"]
@@ -817,11 +822,13 @@ async def resolve_channel(
     ctx: ParsingContext, arg: BaseAst, vbls: PARSE_VARS, conn: asyncpg.Connection, stack: List[str]
 ) -> discord.TextChannel:
     data = await arg.access(ctx, vbls, conn)
+
     if isinstance(data, int):
-        if not any(x.id == arg and isinstance(x, discord.TextChannel) for x in ctx.guild.channels):
+        c = ctx.guild.get_channel(data)
+        if not isinstance(c, discord.TextChannel):
             raise ExecutionInterrupt(f"The referenced channel, {data}, is invalid (not found).", stack)
 
-        return ctx.guild.get_channel(data)
+        return c
 
     _arg = data.lstrip("#").lower()
     channels = tuple(x for x in ctx.guild.channels if x.name.lower() == _arg and isinstance(x, discord.TextChannel))
