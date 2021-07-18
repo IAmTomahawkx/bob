@@ -7,10 +7,10 @@ import discord
 from discord.ext import commands
 
 from core import helping, time
+from core.context import Context
 
 if TYPE_CHECKING:
     from core.bot import Bot
-    from core.context import Context
 
 MSGDAYS_RE = re.compile("(?:--delete-message-days|--dmd|--del)\s+(\d)")
 
@@ -32,7 +32,7 @@ class Moderation(commands.Cog):
 
         if event in dispatch.cached_triggers["automod"][ctx.guild.id]:
             kwargs["__callerid__"] = ctx.author.id
-            await dispatch.fire_event_dispatch(event, ctx.guild, kwargs, conn, ctx.message)
+            await dispatch.fire_event_dispatch(dispatch.cached_triggers['automod'][ctx.guild.id][event], ctx.guild, kwargs, conn, ctx.message)
 
     @commands.command(
         name="warn", usage=[helping.GreedyMember("Target(s)", False), helping.RemainderText("Reason", True)]
