@@ -32,7 +32,9 @@ class Moderation(commands.Cog):
 
         if event in dispatch.cached_triggers["automod"][ctx.guild.id]:
             kwargs["__callerid__"] = ctx.author.id
-            await dispatch.fire_event_dispatch(dispatch.cached_triggers['automod'][ctx.guild.id][event], ctx.guild, kwargs, conn, ctx.message)
+            await dispatch.fire_event_dispatch(
+                dispatch.cached_triggers["automod"][ctx.guild.id][event], ctx.guild, kwargs, conn, ctx.message
+            )
 
     @commands.command(
         name="warn", usage=[helping.GreedyMember("Target(s)", False), helping.RemainderText("Reason", True)]
@@ -157,8 +159,10 @@ class Moderation(commands.Cog):
                 if timestamp and timestamp.dt:
                     timers = ctx.bot.get_cog("Timers")
                     if not timers:
-                        await ctx.send("Failed to schedule the unban timer! Please report this error! "
-                                       "Proceeding to ban without unban timer")
+                        await ctx.send(
+                            "Failed to schedule the unban timer! Please report this error! "
+                            "Proceeding to ban without unban timer"
+                        )
 
                     await timers.schedule_task(
                         "ban_complete", timestamp.dt, conn=conn, guild_id=ctx.guild.id, user_id=user.id
@@ -243,7 +247,7 @@ class Moderation(commands.Cog):
                     fails.append(user)
                     continue
 
-            for user in users: # do the kicks quickly, then proceed to dispatching
+            for user in users:  # do the kicks quickly, then proceed to dispatching
                 if user in fails:
                     continue
 

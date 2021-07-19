@@ -44,13 +44,17 @@ class Dispatch(commands.Cog):
             }
             for x in data
         }
-        self.cached_triggers['configs'].update({x.id: {} for x in self.bot.guilds if x.id not in self.cached_triggers['configs']})
+        self.cached_triggers["configs"].update(
+            {x.id: {} for x in self.bot.guilds if x.id not in self.cached_triggers["configs"]}
+        )
 
         guilds = itertools.groupby(data, lambda k: k["guild_id"])
         self.cached_triggers["events"] = {
             x[0]: {c["name"]: {"name": c["name"], "actions": c["actions"]} for c in x[1]} for x in guilds
         }
-        self.cached_triggers['events'].update({x.id: {} for x in self.bot.guilds if x.id not in self.cached_triggers['events']})
+        self.cached_triggers["events"].update(
+            {x.id: {} for x in self.bot.guilds if x.id not in self.cached_triggers["events"]}
+        )
 
         data = await self.bot.db.fetch(
             """
@@ -63,7 +67,9 @@ class Dispatch(commands.Cog):
         )
         guilds = itertools.groupby(data, lambda k: k["guild_id"])
         self.cached_triggers["automod"] = {c[0]: {x["event"]: dict(x) for x in c[1]} for c in guilds}
-        self.cached_triggers['automod'].update({x.id: {} for x in self.bot.guilds if x.id not in self.cached_triggers['automod']})
+        self.cached_triggers["automod"].update(
+            {x.id: {} for x in self.bot.guilds if x.id not in self.cached_triggers["automod"]}
+        )
 
         self.filled.set()
 
@@ -149,17 +155,19 @@ class Dispatch(commands.Cog):
 
     @commands.Cog.listener()
     async def on_guild_join(self, guild: discord.Guild):
-        self.cached_triggers['automod'][guild.id] = {} # this is needed so that the event handlers don't flip out
-        self.cached_triggers['configs'][guild.id] = {}
+        self.cached_triggers["automod"][guild.id] = {}  # this is needed so that the event handlers don't flip out
+        self.cached_triggers["configs"][guild.id] = {}
 
     @commands.Cog.listener()
     async def on_guild_leave(self, guild: discord.Guild):
         async with self.bot.db.acquire() as conn:
-            data = await conn.fetch("SELECT actions FROM events WHERE cfg_id = (SELECT id FROM configs WHERE guild_id = $1)", guild.id)
+            data = await conn.fetch(
+                "SELECT actions FROM events WHERE cfg_id = (SELECT id FROM configs WHERE guild_id = $1)", guild.id
+            )
             query = """
             SELECT remove_guild_data($1, $2)
             """
-            await conn.execute(query, guild.id, list(itertools.chain([x['actions'] for x in data])))
+            await conn.execute(query, guild.id, list(itertools.chain([x["actions"] for x in data])))
 
     # XXX dispatch firing mechanisms
 
@@ -604,9 +612,7 @@ class Dispatch(commands.Cog):
                 "moderatorid": modid,
             }
             async with self.bot.db.acquire() as conn:
-                await self.fire_event_dispatch(
-                    self.cached_triggers["automod"][guild.id]["ban"], guild, even, conn=conn
-                )
+                await self.fire_event_dispatch(self.cached_triggers["automod"][guild.id]["ban"], guild, even, conn=conn)
 
     @commands.Cog.listener()
     async def on_member_unban(self, guild: discord.Guild, user: discord.User):
