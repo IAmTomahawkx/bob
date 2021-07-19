@@ -1,3 +1,31 @@
+CREATE OR REPLACE FUNCTION
+    remove_guild_data(guildid bigint, rmactions int[])
+RETURNS VOID
+LANGUAGE plpgsql
+as
+$$
+    DECLARE
+        cfgid int;
+    BEGIN
+        SELECT id
+        INTO cfgid
+        FROM configs
+        WHERE configs.guild_id = guildid;
+
+        DELETE FROM actions WHERE id = ANY(rmactions);
+        DELETE FROM automod WHERE cfg_id = cfgid;
+        DELETE FROM events WHERE cfg_id = cfgid;
+        DELETE FROM counters WHERE cfg_id = cfgid;
+        DELETE FROM loggers WHERE cfg_id = cfgid;
+        DELETE FROM commands WHERE cfg_id = cfgid;
+        DELETE FROM messages WHERE guild_id = guildid;
+        DELETE FROM mutes WHERE guild_id = guildid;
+        DELETE FROM prefixes WHERE guild_id = guildid;
+        DELETE FROM selfroles WHERE guild_id = guildid;
+        DELETE FROM cases WHERE guild_id = guildid;
+    END;
+$$;
+
 CREATE TABLE IF NOT EXISTS pages
 (
     quick TEXT NOT NULL PRIMARY KEY,

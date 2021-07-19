@@ -23,6 +23,8 @@ class Dispatch(commands.Cog):
         bot.loop.create_task(self.fill_triggers())
 
     async def fill_triggers(self):
+        await self.bot.wait_until_ready()
+
         if self.filled.is_set():
             return
 
@@ -42,10 +44,13 @@ class Dispatch(commands.Cog):
             }
             for x in data
         }
+        self.cached_triggers['configs'].update({x.id: {} for x in self.bot.guilds if x.id not in self.cached_triggers['configs']})
+
         guilds = itertools.groupby(data, lambda k: k["guild_id"])
         self.cached_triggers["events"] = {
             x[0]: {c["name"]: {"name": c["name"], "actions": c["actions"]} for c in x[1]} for x in guilds
         }
+        self.cached_triggers['events'].update({x.id: {} for x in self.bot.guilds if x.id not in self.cached_triggers['events']})
 
         data = await self.bot.db.fetch(
             """
@@ -58,6 +63,7 @@ class Dispatch(commands.Cog):
         )
         guilds = itertools.groupby(data, lambda k: k["guild_id"])
         self.cached_triggers["automod"] = {c[0]: {x["event"]: dict(x) for x in c[1]} for c in guilds}
+        self.cached_triggers['automod'].update({x.id: {} for x in self.bot.guilds if x.id not in self.cached_triggers['automod']})
 
         self.filled.set()
 
@@ -128,12 +134,11 @@ class Dispatch(commands.Cog):
         else:
             ctx = self.ctx_cache[guild.id] = parse.ParsingContext(self.bot, guild)
 
-        print(event)
         ctx.message.set(message)
         ctx.callerid.set(self.bot.user.id)
 
         try:
-            await ctx.run_automod(event, conn, None, kwargs, messageable=message.channel)
+            await ctx.run_automod(event, conn, None, kwargs, messageable=message and message.channel)
         except parse.ExecutionInterrupt as e:
             g = guild.get_channel(self.cached_triggers["configs"][guild.id]["error_channel"])
             if g:  # drop it silently if it got deleted
@@ -141,6 +146,20 @@ class Dispatch(commands.Cog):
                     await g.send(str(e))
                 except discord.HTTPException:
                     pass
+
+    @commands.Cog.listener()
+    async def on_guild_join(self, guild: discord.Guild):
+        self.cached_triggers['automod'][guild.id] = {} # this is needed so that the event handlers don't flip out
+        self.cached_triggers['configs'][guild.id] = {}
+
+    @commands.Cog.listener()
+    async def on_guild_leave(self, guild: discord.Guild):
+        async with self.bot.db.acquire() as conn:
+            data = await conn.fetch("SELECT actions FROM events WHERE cfg_id = (SELECT id FROM configs WHERE guild_id = $1)", guild.id)
+            query = """
+            SELECT remove_guild_data($1, $2)
+            """
+            await conn.execute(query, guild.id, list(itertools.chain([x['actions'] for x in data])))
 
     # XXX dispatch firing mechanisms
 
@@ -219,7 +238,7 @@ class Dispatch(commands.Cog):
                     "userid": user_id,
                     "usercreatedat": discord.utils.snowflake_time(user_id).isoformat(),
                     "reason": "Timed ban expired",
-                    "moderator": str(self.bot.user),
+                    "moderatorname": str(self.bot.user),
                     "moderatorid": self.bot.user.id,
                 }
                 async with self.bot.db.acquire() as conn:
@@ -552,7 +571,7 @@ class Dispatch(commands.Cog):
         if guild.id not in self.cached_triggers["automod"]:
             return
 
-        if "user_ban" in self.cached_triggers["automod"][guild.id]:
+        if "ban" in self.cached_triggers["automod"][guild.id]:
             await asyncio.sleep(0.5)
 
             if guild.me.guild_permissions.view_audit_log:
@@ -586,7 +605,7 @@ class Dispatch(commands.Cog):
             }
             async with self.bot.db.acquire() as conn:
                 await self.fire_event_dispatch(
-                    self.cached_triggers["automod"][guild.id]["user_ban"], guild, even, conn=conn
+                    self.cached_triggers["automod"][guild.id]["ban"], guild, even, conn=conn
                 )
 
     @commands.Cog.listener()
@@ -595,7 +614,7 @@ class Dispatch(commands.Cog):
         if guild.id not in self.cached_triggers["automod"]:
             return
 
-        if "user_unban" in self.cached_triggers["automod"][guild.id]:
+        if "unban" in self.cached_triggers["automod"][guild.id]:
             await asyncio.sleep(0.5)
 
             if guild.me.guild_permissions.view_audit_log:
@@ -617,12 +636,13 @@ class Dispatch(commands.Cog):
 
             even = {
                 "userid": user.id,
+                "username": str(user),
                 "usercreatedat": user.created_at,
                 "reason": reason,
-                "moderator": moderator,
+                "moderatorname": moderator,
                 "moderatorid": modid,
             }
             async with self.bot.db.acquire() as conn:
                 await self.fire_event_dispatch(
-                    self.cached_triggers["automod"][guild.id]["user_unban"], guild, even, conn=conn
+                    self.cached_triggers["automod"][guild.id]["unban"], guild, even, conn=conn
                 )
