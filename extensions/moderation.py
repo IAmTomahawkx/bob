@@ -157,7 +157,8 @@ class Moderation(commands.Cog):
                 if timestamp and timestamp.dt:
                     timers = ctx.bot.get_cog("Timers")
                     if not timers:
-                        await ctx.send("Failed to schedule the unban timer! Please report this error")
+                        await ctx.send("Failed to schedule the unban timer! Please report this error! "
+                                       "Proceeding to ban without unban timer")
 
                     await timers.schedule_task(
                         "ban_complete", timestamp.dt, conn=conn, guild_id=ctx.guild.id, user_id=user.id
@@ -210,8 +211,80 @@ class Moderation(commands.Cog):
     )
     @commands.guild_only()
     @commands.bot_has_guild_permissions(kick_members=True)
-    async def kick(self, ctx: Context, users: commands.Greedy[discord.Member], *, reason: str):
-        pass
+    async def kick(self, ctx: Context, users: commands.Greedy[discord.Member], *, reason: str = None):
+        """
+        Kicks one or more members from the server. For every member kicked, a case will be created.
+        """
+        if not users:
+            return await ctx.reply("Please provide one or more member.", mention_author=False)
+
+        reason = reason or "None Provided"
+        audit_reason = reason + f" (Action by {ctx.author} {ctx.author.id})"
+        fails = []
+
+        query = """
+        INSERT INTO
+            cases
+            (guild_id, id, user_id, mod_id, action, reason, link)
+        VALUES 
+            ($1, (SELECT COUNT(*) + 1 FROM cases WHERE guild_id = $1), $2, $3, $4, $5, $6)
+        RETURNING id
+        """
+
+        async with self.bot.db.acquire() as conn:
+            for user in users:
+                if user.top_role.position > ctx.guild.me.top_role.position:
+                    fails.append(user)
+                    continue
+
+                try:
+                    await user.kick(reason=audit_reason)
+                except discord.HTTPException:
+                    fails.append(user)
+                    continue
+
+            for user in users: # do the kicks quickly, then proceed to dispatching
+                if user in fails:
+                    continue
+
+                resp = await conn.fetchval(
+                    query, ctx.guild.id, user.id, ctx.author.id, "kick", reason, ctx.message.jump_url
+                )
+                context = {
+                    "caseid": resp,
+                    "casereason": reason,
+                    "caseaction": "kick",
+                    "casemodid": ctx.author.id,
+                    "casemodname": str(ctx.author),
+                    "caseuserid": user.id,
+                    "caseusername": str(user),
+                }
+                await self.dispatch_automod(ctx, "case", conn, context)
+
+        if fails:
+            try:
+                await ctx.message.add_reaction("\U0000203c\U0000fe0f")
+            except discord.HTTPException:
+                pass
+
+            if len(users) > 1:
+                await ctx.reply(
+                    f"Kicked {len(users) - len(fails)} users.\nFailed to kick the following users:\n{' '.join(x.mention for x in fails)}",
+                    mention_author=False,
+                )
+            else:
+                await ctx.reply(f"Could not kick {users[0]}", mention_author=False)
+
+        else:
+            try:
+                await ctx.message.add_reaction("\U0001f44d")
+            except discord.HTTPException:
+                pass
+
+            if len(users) > 1:
+                await ctx.reply(f"Kicked {len(users)} users", mention_author=False, delete_after=5)
+            else:
+                await ctx.reply(f"Kicked {users[0]}", mention_author=False, delete_after=5)
 
     @commands.command(
         name="massban",
