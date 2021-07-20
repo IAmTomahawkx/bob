@@ -40,6 +40,7 @@ class Moderation(commands.Cog):
         name="warn", usage=[helping.GreedyMember("Target(s)", False), helping.RemainderText("Reason", True)]
     )
     @commands.guild_only()
+    @commands.has_permissions(manage_messages=True)
     async def warn(self, ctx: Context, users: commands.Greedy[discord.Member], *, reason: str):
         """
         Adds a warning to a user, automatically creating a new moderation case, and dispatching the `warn` and `case` automod events.
@@ -101,7 +102,8 @@ class Moderation(commands.Cog):
         ],
     )
     @commands.guild_only()
-    @commands.bot_has_guild_permissions(ban_members=True)
+    @commands.has_permissions(ban_members=True)
+    @commands.bot_has_permissions(ban_members=True)
     async def ban(
         self, ctx: Context, users: commands.Greedy[discord.Member], *, timestamp: time.UserFriendlyTime = None
     ):
@@ -214,6 +216,7 @@ class Moderation(commands.Cog):
         name="kick", usage=[helping.GreedyMember("Target(s)", False), helping.RemainderText("Reason", True)]
     )
     @commands.guild_only()
+    @commands.has_permissions(kick_members=True)
     @commands.bot_has_guild_permissions(kick_members=True)
     async def kick(self, ctx: Context, users: commands.Greedy[discord.Member], *, reason: str = None):
         """
@@ -294,6 +297,9 @@ class Moderation(commands.Cog):
         name="massban",
         # TODO: gotta figure out how to document flags
     )
+    @commands.has_permissions(ban_members=True)
+    @commands.has_guild_permissions(ban_members=True)
+    @commands.guild_only()
     async def massban(self, ctx: Context):  # TODO: massban args
         pass
 
@@ -306,6 +312,21 @@ class Moderation(commands.Cog):
         ],
     )
     @commands.bot_has_permissions(manage_roles=True)
+    @commands.has_permissions(manage_roles=True)
     @commands.guild_only()
     async def mute(self, ctx: Context, users: commands.Greedy[discord.Member], *, timestamp: time.UserFriendlyTime):
         pass
+
+    @commands.command(
+        name="purge",
+        usage=[
+            helping.Number("Search Messages", False),
+            helping.MemberFlag("Target", True),
+            helping.TextFlag("Contents", True)
+        ]
+    )
+    @commands.bot_has_guild_permissions(manage_messages=True)
+    @commands.guild_only()
+    @commands.has_permissions(manage_messages=True)
+    async def purge(self, ctx: Context, amount: int, target: commands.flag(max_args=1, override=True), contents: commands.flag(max_args=1, override=True)):
+        pass # TODO

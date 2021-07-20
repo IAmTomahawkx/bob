@@ -237,3 +237,58 @@ class GreedyUser(BaseHelper):
             return f"[{self.name}: User(s)]"
 
         return f"{self.name}: User(s)"
+
+class FlagHelper(BaseHelper):
+    pass
+
+class NumberFlag(FlagHelper):
+    description = "A number"
+    example = "{name}: 5"
+
+    @property
+    def long(self) -> str:
+        if self.optional:
+            return f"[{self.name}: Number]"
+
+        return f"{self.name}: Number"
+
+    short = long
+
+class TextFlag(FlagHelper):
+    description = "Some text"
+    example = "{name}: hi hello"
+
+    @property
+    def long(self) -> str:
+        if self.optional:
+            return f"[{self.name}: Text]"
+
+        return f"{self.name}: Text"
+
+    short = long
+
+class UserFlag(FlagHelper):
+    description = "A user on discord. This should be in the form of a user id, as the user might not be in the server (read: name not available to the bot)."
+    example = "{name}: 80088516616269824"
+
+    @property
+    def long(self) -> str:
+        if self.optional:
+            return f"[{self.name}: User]"
+
+        return f"{self.name}: User"
+
+    short = long
+
+class MemberFlag(FlagHelper):
+    description = "A member in your server. You can ping them, use their name, or their id as the argument."
+    example = "{name}: @IAmTomahawkx"
+
+    @property
+    def long(self) -> str:
+        if self.optional:
+            return f"[{self.name}: Member]"
+
+        return f"{self.name}: Member"
+
+    short = long
