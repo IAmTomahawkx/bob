@@ -7,7 +7,7 @@ from typing import Dict, Union
 
 from discord.ext import commands
 from core.bot import Bot
-from core import parse
+from core import parse, utils
 
 
 def setup(bot: Bot):
@@ -21,6 +21,8 @@ class Dispatch(commands.Cog):
         self.ctx_cache = {}
         self.filled = asyncio.Event()
         bot.loop.create_task(self.fill_triggers())
+
+        self.recent_events = utils.ExpiringDict()
 
     async def fill_triggers(self):
         await self.bot.wait_until_ready()
@@ -126,6 +128,14 @@ class Dispatch(commands.Cog):
         self.cached_triggers["automod"][guild_id] = {x["event"]: dict(x) for x in data}
 
         self.filled.set()
+
+    async def get_context(self, guild_id: int) -> parse.ParsingContext:
+        if guild_id in self.ctx_cache:
+            return self.ctx_cache[guild_id]
+
+        ctx = self.ctx_cache[guild_id] = parse.ParsingContext(self.bot, self.bot.get_guild(guild_id))
+        await ctx.fetch_required_data()
+        return ctx
 
     async def fire_event_dispatch(
         self,
@@ -547,8 +557,13 @@ class Dispatch(commands.Cog):
     @commands.Cog.listener()
     async def on_member_update(self, before: discord.Member, after: discord.Member):
         await self.filled.wait()
+
         if before.guild.id not in self.cached_triggers["automod"]:
+            print(1)
             return
+
+        ctx = await self.get_context(after.guild.id)
+        guild = after.guild
 
         if "user_update" in self.cached_triggers["automod"][before.guild.id]:
             even = {
@@ -572,6 +587,62 @@ class Dispatch(commands.Cog):
                 await self.fire_event_dispatch(
                     self.cached_triggers["automod"][before.guild.id]["user_leave"], before.guild, even, conn=conn
                 )
+
+        print(ctx.mute_role, ctx.mute_role and after._roles.has(ctx.mute_role), ctx.mute_role and before._roles.has(ctx.mute_role))
+        if ctx.mute_role and after._roles.has(ctx.mute_role) and not before._roles.has(ctx.mute_role): # noqa
+            print(2)
+            # create a case for it and dispatch mute events
+            query = """
+            INSERT INTO
+                cases
+                (guild_id, id, user_id, mod_id, action, reason, link)
+            VALUES
+                ($1, (SELECT COUNT(*) + 1 FROM cases WHERE guild_id = $1), $2, $3, $4, $5, $6)
+            RETURNING id
+            """
+
+            recent = self.recent_events.maybe_pop((after.guild.id, after.id, "mute"))
+            reason = "<Mute not found>"
+            link = None
+            dt = None
+            moderator = None
+
+            if recent:
+                reason = recent[0]
+                moderator = recent[1]
+                link = recent[2]
+                dt = recent[3]
+
+            elif guild.me.guild_permissions.view_audit_log:
+                await asyncio.sleep(0.5)
+                async for upd in guild.audit_logs(
+                        action=discord.AuditLogAction.member_role_update):  # type: discord.AuditLogEntry
+                    if upd.target == after:
+                        reason = after.reason or "No reason provided"
+                        moderator = upd.user
+                        break
+
+                else:
+                    reason = "<Mute not found>"
+
+            async with self.bot.db.acquire() as conn:
+                resp = await conn.fetchval(
+                    query, ctx.guild.id, after.id, (moderator and moderator.id) or self.bot.user.id,
+                    "tempmute" if dt else "mute", reason, link
+                )
+                if "case" in self.cached_triggers["automod"][ctx.guild.id]:
+                    cont = {
+                        "caseid": resp,
+                        "casereason": reason,
+                        "caseaction": "tempmute" if dt else "mute",
+                        "casemodid": moderator.id,
+                        "casemodname": str(moderator),
+                        "caseuserid": after.id,
+                        "caseusername": str(after),
+                    }
+                    await self.fire_event_dispatch(
+                        self.cached_triggers["automod"][ctx.guild.id]["case"], ctx.guild, cont, conn
+                    )
 
     @commands.Cog.listener()
     async def on_member_ban(self, guild: discord.Guild, user: discord.User):

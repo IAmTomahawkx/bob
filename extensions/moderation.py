@@ -1,6 +1,6 @@
 from __future__ import annotations
 import re
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 import asyncpg
 import discord
@@ -8,6 +8,7 @@ from discord.ext import commands
 
 from core import helping, time
 from core.context import Context
+from core.parse import ParsingContext
 
 if TYPE_CHECKING:
     from core.bot import Bot
@@ -105,7 +106,7 @@ class Moderation(commands.Cog):
     @commands.has_permissions(ban_members=True)
     @commands.bot_has_permissions(ban_members=True)
     async def ban(
-        self, ctx: Context, users: commands.Greedy[discord.Member], *, timestamp: time.UserFriendlyTime = None
+        self, ctx: Context, users: commands.Greedy[discord.Member], *, timestamp: time.OptionalUserFriendlyTime = None
     ):
         """
         Bans user(s) from the server, creating a case for each one. Optionally will create a timer to unban them
@@ -123,6 +124,10 @@ class Moderation(commands.Cog):
 
         if timestamp:
             reason = timestamp.arg or "None Given"
+            dt = timestamp.dt
+        else:
+            reason = "None Given"
+            dt = None
 
         if timestamp and timestamp.arg:
             dmd = MSGDAYS_RE.search(reason)
@@ -174,12 +179,12 @@ class Moderation(commands.Cog):
                 # when the event is received
 
                 resp = await conn.fetchval(
-                    query, ctx.guild.id, user.id, ctx.author.id, "ban", reason, ctx.message.jump_url
+                    query, ctx.guild.id, user.id, ctx.author.id, "tempban" if dt else "ban", reason, ctx.message.jump_url
                 )
                 context = {
                     "caseid": resp,
                     "casereason": reason,
-                    "caseaction": "ban",
+                    "caseaction": "tempban" if dt else "ban",
                     "casemodid": ctx.author.id,
                     "casemodname": str(ctx.author),
                     "caseuserid": user.id,
@@ -314,8 +319,90 @@ class Moderation(commands.Cog):
     @commands.bot_has_permissions(manage_roles=True)
     @commands.has_permissions(manage_roles=True)
     @commands.guild_only()
-    async def mute(self, ctx: Context, users: commands.Greedy[discord.Member], *, timestamp: time.UserFriendlyTime):
-        pass
+    async def mute(self, ctx: Context, users: commands.Greedy[discord.Member], *, timestamp: Optional[time.OptionalUserFriendlyTime]):
+        """
+        Mutes one or more members, optionally unmuting them automatically after a specific duration.
+        """
+        if not users:
+            return await ctx.reply("Please provide at least one user to mute.", mention_author=False)
+
+        if timestamp is None:
+            dt = reason = None
+        else:
+            dt = timestamp.dt
+            reason = timestamp.arg
+
+        reason = reason or "No reason given"
+        audit_reason = reason + f" (action by {ctx.author} {ctx.author.id})"
+
+        context = None
+        dispatch = self.bot.get_cog("Dispatch")
+        if dispatch:
+            context = dispatch.ctx_cache.get(ctx.guild.id)
+
+        if not context:
+            context = ParsingContext(self.bot, ctx.guild)
+            await context.fetch_required_data()
+
+        role = ctx.guild.get_role(context.mute_role)
+        if not role:
+            if ctx.author.guild_permissions.administrator:
+                return await ctx.reply("There is no mute role set up. Please add a mute role to your server configuration")
+
+            return await ctx.reply("There is no mute role set up. Please tell a server admin to set one up")
+
+        fails = []
+
+        async with self.bot.db.acquire() as conn:
+            for user in users:
+                if dt:
+                    timers = self.bot.get_cog("Timers")
+                    if not timers:
+                        await ctx.send(
+                            "Failed to schedule the unmute timer! Please report this error! "
+                            "Proceeding to mute without unmute timer"
+                        )
+
+                    await timers.schedule_task(
+                        "mute_complete", dt, conn=conn, guild_id=ctx.guild.id, user_id=user.id
+                    )
+
+                try:
+                    dispatch.recent_events[(ctx.guild.id, user.id, "mute")] = (
+                        reason, ctx.author, ctx.message.jump_url, dt
+                    )
+                    await user.add_roles(role, reason=audit_reason)
+                except discord.HTTPException:
+                    del dispatch.recent_events[(ctx.guild.id, user.id, "mute")]
+                    fails.append(user)
+                    continue
+
+
+        if fails:
+            try:
+                await ctx.message.add_reaction("\U0000203c\U0000fe0f")
+            except discord.HTTPException:
+                pass
+
+            if len(users) > 1:
+                await ctx.reply(
+                    f"Muted {len(users) - len(fails)} users.\nFailed to mute the following users:\n{' '.join(x.mention for x in fails)}",
+                    mention_author=False,
+                )
+            else:
+                await ctx.reply(f"Could not mute {users[0]}", mention_author=False)
+
+        else:
+            try:
+                await ctx.message.add_reaction("\U0001f44d")
+            except discord.HTTPException:
+                pass
+
+            if len(users) > 1:
+                await ctx.reply(f"Muted {len(users)} users", mention_author=False, delete_after=5)
+            else:
+                await ctx.reply(f"Muted {users[0]}", mention_author=False, delete_after=5)
+
 
     @commands.command(
         name="purge",

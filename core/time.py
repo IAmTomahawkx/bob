@@ -191,6 +191,11 @@ class UserFriendlyTime(commands.Converter):
 
         elements = calendar.nlp(argument, sourceTime=now)
         if elements is None or len(elements) == 0:
+            if isinstance(self, OptionalUserFriendlyTime):
+                self.arg = argument
+                self.dt = None
+                return self
+
             raise commands.BadArgument('Time Error! try "in an hour" or "5 days".')
 
         # handle the following cases:
@@ -222,6 +227,9 @@ class UserFriendlyTime(commands.Converter):
             remaining = ""
 
         return await self.check_constraints(ctx, now, remaining)
+
+class OptionalUserFriendlyTime(UserFriendlyTime):
+    pass
 
 
 def human_timedelta(dt, *, source=None, accuracy=3, brief=False, suffix=True):
