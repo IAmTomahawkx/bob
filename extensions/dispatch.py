@@ -559,7 +559,6 @@ class Dispatch(commands.Cog):
         await self.filled.wait()
 
         if before.guild.id not in self.cached_triggers["automod"]:
-            print(1)
             return
 
         ctx = await self.get_context(after.guild.id)
@@ -588,9 +587,7 @@ class Dispatch(commands.Cog):
                     self.cached_triggers["automod"][before.guild.id]["user_leave"], before.guild, even, conn=conn
                 )
 
-        print(ctx.mute_role, ctx.mute_role and after._roles.has(ctx.mute_role), ctx.mute_role and before._roles.has(ctx.mute_role))
         if ctx.mute_role and after._roles.has(ctx.mute_role) and not before._roles.has(ctx.mute_role): # noqa
-            print(2)
             # create a case for it and dispatch mute events
             query = """
             INSERT INTO
