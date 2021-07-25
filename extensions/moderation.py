@@ -119,7 +119,6 @@ class Moderation(commands.Cog):
         if not users:
             return await ctx.reply("Please pass one or more users", mention_author=False)
 
-        reason = None
         msgdays = 1
 
         if timestamp:
@@ -142,18 +141,12 @@ class Moderation(commands.Cog):
 
                 reason = reason.replace(dmd.string, "", 1)
 
-        audit_reason = reason + f" (Action by {ctx.author} {ctx.author.id})"
-
-        query = """
-        INSERT INTO
-            cases
-            (guild_id, id, user_id, mod_id, action, reason, link)
-        VALUES 
-            ($1, (SELECT COUNT(*) + 1 FROM cases WHERE guild_id = $1), $2, $3, $4, $5, $6)
-        RETURNING id
-        """
+        audit_reason = f"{reason} (Action by {ctx.author} {ctx.author.id})"
 
         fails = []
+        dispatch = self.bot.get_cog("Dispatch")
+        if not dispatch:
+            raise RuntimeError("Failed to acquire the dispatcher, cannot proceed. Please report this")
 
         async with self.bot.db.acquire() as conn:
             for user in users:
@@ -175,22 +168,7 @@ class Moderation(commands.Cog):
                         "ban_complete", timestamp.dt, conn=conn, guild_id=ctx.guild.id, user_id=user.id
                     )
 
-                # we don't dispatch the ban event here because that will be dispatched by the user_ban handler
-                # when the event is received
-
-                resp = await conn.fetchval(
-                    query, ctx.guild.id, user.id, ctx.author.id, "tempban" if dt else "ban", reason, ctx.message.jump_url
-                )
-                context = {
-                    "caseid": resp,
-                    "casereason": reason,
-                    "caseaction": "tempban" if dt else "ban",
-                    "casemodid": ctx.author.id,
-                    "casemodname": str(ctx.author),
-                    "caseuserid": user.id,
-                    "caseusername": str(user),
-                }
-                await self.dispatch_automod(ctx, "case", conn, context)
+                dispatch.recent_events[(ctx.guild.id, user.id, "ban")] = (user, ctx.author, reason, ctx.message.jump_url, dt)
 
         if fails:
             try:
@@ -234,44 +212,22 @@ class Moderation(commands.Cog):
         audit_reason = reason + f" (Action by {ctx.author} {ctx.author.id})"
         fails = []
 
-        query = """
-        INSERT INTO
-            cases
-            (guild_id, id, user_id, mod_id, action, reason, link)
-        VALUES 
-            ($1, (SELECT COUNT(*) + 1 FROM cases WHERE guild_id = $1), $2, $3, $4, $5, $6)
-        RETURNING id
-        """
+        dispatch = self.bot.get_cog("Dispatch")
+        if not dispatch:
+            raise RuntimeError("Failed to acquire dispatcher, cannot continue. Please report this")
 
-        async with self.bot.db.acquire() as conn:
-            for user in users:
-                if user.top_role.position > ctx.guild.me.top_role.position:
-                    fails.append(user)
-                    continue
+        for user in users:
+            if user.top_role.position > ctx.guild.me.top_role.position:
+                fails.append(user)
+                continue
 
-                try:
-                    await user.kick(reason=audit_reason)
-                except discord.HTTPException:
-                    fails.append(user)
-                    continue
+            try:
+                await user.kick(reason=audit_reason)
+            except discord.HTTPException:
+                fails.append(user)
+                continue
 
-            for user in users:  # do the kicks quickly, then proceed to dispatching
-                if user in fails:
-                    continue
-
-                resp = await conn.fetchval(
-                    query, ctx.guild.id, user.id, ctx.author.id, "kick", reason, ctx.message.jump_url
-                )
-                context = {
-                    "caseid": resp,
-                    "casereason": reason,
-                    "caseaction": "kick",
-                    "casemodid": ctx.author.id,
-                    "casemodname": str(ctx.author),
-                    "caseuserid": user.id,
-                    "caseusername": str(user),
-                }
-                await self.dispatch_automod(ctx, "case", conn, context)
+            dispatch.recent_events[(ctx.guild.id, user.id, "kick")] = (user, ctx.author, reason, ctx.message.jump_url)
 
         if fails:
             try:
