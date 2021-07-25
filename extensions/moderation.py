@@ -168,7 +168,13 @@ class Moderation(commands.Cog):
                         "ban_complete", timestamp.dt, conn=conn, guild_id=ctx.guild.id, user_id=user.id
                     )
 
-                dispatch.recent_events[(ctx.guild.id, user.id, "ban")] = (user, ctx.author, reason, ctx.message.jump_url, dt)
+                dispatch.recent_events[(ctx.guild.id, user.id, "ban")] = (
+                    user,
+                    ctx.author,
+                    reason,
+                    ctx.message.jump_url,
+                    dt,
+                )
 
         if fails:
             try:
@@ -275,7 +281,13 @@ class Moderation(commands.Cog):
     @commands.bot_has_permissions(manage_roles=True)
     @commands.has_permissions(manage_roles=True)
     @commands.guild_only()
-    async def mute(self, ctx: Context, users: commands.Greedy[discord.Member], *, timestamp: Optional[time.OptionalUserFriendlyTime]):
+    async def mute(
+        self,
+        ctx: Context,
+        users: commands.Greedy[discord.Member],
+        *,
+        timestamp: Optional[time.OptionalUserFriendlyTime],
+    ):
         """
         Mutes one or more members, optionally unmuting them automatically after a specific duration.
         """
@@ -303,7 +315,9 @@ class Moderation(commands.Cog):
         role = ctx.guild.get_role(context.mute_role)
         if not role:
             if ctx.author.guild_permissions.administrator:
-                return await ctx.reply("There is no mute role set up. Please add a mute role to your server configuration")
+                return await ctx.reply(
+                    "There is no mute role set up. Please add a mute role to your server configuration"
+                )
 
             return await ctx.reply("There is no mute role set up. Please tell a server admin to set one up")
 
@@ -319,20 +333,20 @@ class Moderation(commands.Cog):
                             "Proceeding to mute without unmute timer"
                         )
 
-                    await timers.schedule_task(
-                        "mute_complete", dt, conn=conn, guild_id=ctx.guild.id, user_id=user.id
-                    )
+                    await timers.schedule_task("mute_complete", dt, conn=conn, guild_id=ctx.guild.id, user_id=user.id)
 
                 try:
                     dispatch.recent_events[(ctx.guild.id, user.id, "mute")] = (
-                        reason, ctx.author, ctx.message.jump_url, dt
+                        reason,
+                        ctx.author,
+                        ctx.message.jump_url,
+                        dt,
                     )
                     await user.add_roles(role, reason=audit_reason)
                 except discord.HTTPException:
                     del dispatch.recent_events[(ctx.guild.id, user.id, "mute")]
                     fails.append(user)
                     continue
-
 
         if fails:
             try:
@@ -358,7 +372,6 @@ class Moderation(commands.Cog):
                 await ctx.reply(f"Muted {len(users)} users", mention_author=False, delete_after=5)
             else:
                 await ctx.reply(f"Muted {users[0]}", mention_author=False, delete_after=5)
-
 
     @commands.command(
         name="purge",

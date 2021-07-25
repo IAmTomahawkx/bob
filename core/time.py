@@ -228,6 +228,7 @@ class UserFriendlyTime(commands.Converter):
 
         return await self.check_constraints(ctx, now, remaining)
 
+
 class OptionalUserFriendlyTime(UserFriendlyTime):
     pass
 

@@ -1,5 +1,6 @@
 import time
 
+
 class ExpiringDict(dict):
     def __init__(self, *, timeout=30):
         self._timeout = timeout
@@ -36,4 +37,3 @@ class ExpiringDict(dict):
         for x, (y, z) in set(self.items()):
             if now - y > self._timeout:
                 del self[x]
-

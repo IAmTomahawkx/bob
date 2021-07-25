@@ -537,14 +537,14 @@ class Dispatch(commands.Cog):
         if member.guild.id not in self.cached_triggers["automod"]:
             return
 
-        await asyncio.sleep(0.5) # so that other handlers fetch from recent events before we pop it off
+        await asyncio.sleep(0.5)  # so that other handlers fetch from recent events before we pop it off
         # also cause im too lazy to do any semaphores lol
 
         async with self.bot.db.acquire() as conn:
             recent = self.recent_events.maybe_pop((member.guild.id, member.id, "ban"))
             if recent:
                 return
-            
+
             recent = self.recent_events.maybe_pop((member.guild.id, member.id, "kick"))
 
             if recent:
@@ -558,8 +558,13 @@ class Dispatch(commands.Cog):
                 RETURNING id
                 """
                 resp = await conn.fetchval(
-                    query, member.guild.id, member.id, (moderator and moderator.id) or self.bot.user.id,
-                    "kick", reason, link
+                    query,
+                    member.guild.id,
+                    member.id,
+                    (moderator and moderator.id) or self.bot.user.id,
+                    "kick",
+                    reason,
+                    link,
                 )
                 if "case" in self.cached_triggers["automod"][member.guild.id]:
                     cont = {
@@ -626,7 +631,7 @@ class Dispatch(commands.Cog):
                     self.cached_triggers["automod"][before.guild.id]["user_leave"], before.guild, even, conn=conn
                 )
 
-        if ctx.mute_role and after._roles.has(ctx.mute_role) and not before._roles.has(ctx.mute_role): # noqa
+        if ctx.mute_role and after._roles.has(ctx.mute_role) and not before._roles.has(ctx.mute_role):  # noqa
             # create a case for it and dispatch mute events
             query = """
             INSERT INTO
@@ -652,7 +657,8 @@ class Dispatch(commands.Cog):
             elif guild.me.guild_permissions.view_audit_log:
                 await asyncio.sleep(0.5)
                 async for upd in guild.audit_logs(
-                        action=discord.AuditLogAction.member_role_update):  # type: discord.AuditLogEntry
+                    action=discord.AuditLogAction.member_role_update
+                ):  # type: discord.AuditLogEntry
                     if upd.target == after:
                         reason = upd.reason or "No reason provided"
                         moderator = upd.user
@@ -663,8 +669,13 @@ class Dispatch(commands.Cog):
 
             async with self.bot.db.acquire() as conn:
                 resp = await conn.fetchval(
-                    query, ctx.guild.id, after.id, (moderator and moderator.id) or self.bot.user.id,
-                    "tempmute" if dt else "mute", reason, link
+                    query,
+                    ctx.guild.id,
+                    after.id,
+                    (moderator and moderator.id) or self.bot.user.id,
+                    "tempmute" if dt else "mute",
+                    reason,
+                    link,
                 )
                 if "case" in self.cached_triggers["automod"][ctx.guild.id]:
                     cont = {
@@ -701,7 +712,8 @@ class Dispatch(commands.Cog):
             elif guild.me.guild_permissions.view_audit_log:
                 await asyncio.sleep(0.5)
                 async for upd in guild.audit_logs(
-                        action=discord.AuditLogAction.member_role_update):  # type: discord.AuditLogEntry
+                    action=discord.AuditLogAction.member_role_update
+                ):  # type: discord.AuditLogEntry
                     if upd.target == after:
                         reason = upd.reason or "No reason provided"
                         moderator = upd.user
@@ -712,8 +724,13 @@ class Dispatch(commands.Cog):
 
             async with self.bot.db.acquire() as conn:
                 resp = await conn.fetchval(
-                    query, ctx.guild.id, after.id, (moderator and moderator.id) or self.bot.user.id,
-                    "unmute", reason, link
+                    query,
+                    ctx.guild.id,
+                    after.id,
+                    (moderator and moderator.id) or self.bot.user.id,
+                    "unmute",
+                    reason,
+                    link,
                 )
                 if "case" in self.cached_triggers["automod"][ctx.guild.id]:
                     cont = {
@@ -741,7 +758,7 @@ class Dispatch(commands.Cog):
             target, moderator, reason, link, dt = recent
 
         else:
-            self.recent_events[(guild.id, user.id, "ban")] = None # set this for the member_remove handler
+            self.recent_events[(guild.id, user.id, "ban")] = None  # set this for the member_remove handler
             await asyncio.sleep(0.5)
 
             if guild.me.guild_permissions.view_audit_log:
@@ -784,9 +801,7 @@ class Dispatch(commands.Cog):
                 ($1, (SELECT COUNT(*) + 1 FROM cases WHERE guild_id = $1), $2, $3, $4, $5, $6)
             RETURNING id
             """
-            resp = await conn.fetchval(
-                query, guild.id, user.id, moderator.id, "tempban" if dt else "ban", reason, link
-            )
+            resp = await conn.fetchval(query, guild.id, user.id, moderator.id, "tempban" if dt else "ban", reason, link)
             if "case" in self.cached_triggers["automod"][guild.id]:
                 cont = {
                     "caseid": resp,
@@ -797,9 +812,7 @@ class Dispatch(commands.Cog):
                     "caseuserid": user.id,
                     "caseusername": str(user),
                 }
-                await self.fire_event_dispatch(
-                    self.cached_triggers["automod"][guild.id]["case"], guild, cont, conn
-                )
+                await self.fire_event_dispatch(self.cached_triggers["automod"][guild.id]["case"], guild, cont, conn)
 
     @commands.Cog.listener()
     async def on_member_unban(self, guild: discord.Guild, user: discord.User):
@@ -846,7 +859,9 @@ class Dispatch(commands.Cog):
                     "moderator": str(moderator) if moderator else str(self.bot.user),
                     "moderatorid": moderator.id if moderator else self.bot.user.id,
                 }
-                await self.fire_event_dispatch(self.cached_triggers["automod"][guild.id]["unban"], guild, even, conn=conn)
+                await self.fire_event_dispatch(
+                    self.cached_triggers["automod"][guild.id]["unban"], guild, even, conn=conn
+                )
 
             query = """
             INSERT INTO
@@ -856,9 +871,7 @@ class Dispatch(commands.Cog):
                 ($1, (SELECT COUNT(*) + 1 FROM cases WHERE guild_id = $1), $2, $3, $4, $5, $6)
             RETURNING id
             """
-            resp = await conn.fetchval(
-                query, guild.id, user.id, moderator.id, "unban", reason, link
-            )
+            resp = await conn.fetchval(query, guild.id, user.id, moderator.id, "unban", reason, link)
             if "case" in self.cached_triggers["automod"][guild.id]:
                 cont = {
                     "caseid": resp,
@@ -869,6 +882,4 @@ class Dispatch(commands.Cog):
                     "caseuserid": user.id,
                     "caseusername": str(user),
                 }
-                await self.fire_event_dispatch(
-                    self.cached_triggers["automod"][guild.id]["case"], guild, cont, conn
-                )
+                await self.fire_event_dispatch(self.cached_triggers["automod"][guild.id]["case"], guild, cont, conn)
