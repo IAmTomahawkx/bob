@@ -365,11 +365,17 @@ class Moderation(commands.Cog):
         usage=[
             helping.Number("Search Messages", False),
             helping.MemberFlag("Target", True),
-            helping.TextFlag("Contents", True)
-        ]
+            helping.TextFlag("Contents", True),
+        ],
     )
     @commands.bot_has_guild_permissions(manage_messages=True)
     @commands.guild_only()
     @commands.has_permissions(manage_messages=True)
-    async def purge(self, ctx: Context, amount: int, target: commands.flag(max_args=1, override=True), contents: commands.flag(max_args=1, override=True)):
-        pass # TODO
+    async def purge(
+        self,
+        ctx: Context,
+        amount: int,
+        target: commands.flag(max_args=1, override=True),
+        contents: commands.flag(max_args=1, override=True),
+    ):
+        pass  # TODO
