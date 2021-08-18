@@ -1,5 +1,6 @@
 from typing import Any
 
+
 class BaseHelper:
     __slots__ = ("optional", "name", "default")
     description: str
