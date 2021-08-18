@@ -1,11 +1,14 @@
+from typing import Any
+
 class BaseHelper:
-    __slots__ = ("optional", "name")
+    __slots__ = ("optional", "name", "default")
     description: str
     example: str
 
-    def __init__(self, name: str, optional: bool):
+    def __init__(self, name: str, optional: bool, default: Any = None):
         self.name = name
         self.optional = optional
+        self.default = default
 
     @property
     def short(self) -> str:

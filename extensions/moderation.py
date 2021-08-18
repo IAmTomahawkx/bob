@@ -1,6 +1,6 @@
 from __future__ import annotations
 import re
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Optional, Tuple
 
 import asyncpg
 import discord
@@ -9,12 +9,19 @@ from discord.ext import commands
 from core import helping, time
 from core.context import Context
 from core.parse import ParsingContext
+from deps.safe_regex import Re, compile
 
 if TYPE_CHECKING:
     from core.bot import Bot
 
 MSGDAYS_RE = re.compile("(?:--delete-message-days|--dmd|--del)\s+(\d)")
 
+class PurgeFlags(commands.FlagConverter, case_insensitive=True):
+    users: Tuple[discord.User, ...] = commands.flag(aliases=['user', 'u', 'member', 'members', 'm'], default=lambda _: [])
+    contents: Optional[str] = commands.flag(aliases=['content', 'c'])
+    reason: Optional[str]
+    embeds: Optional[bool] = commands.flag(aliases=['e'], default=lambda _: False)
+    limit: Optional[int] = 1000
 
 def setup(bot: Bot):
     bot.add_cog(Moderation(bot))
@@ -376,7 +383,7 @@ class Moderation(commands.Cog):
     @commands.command(
         name="purge",
         usage=[
-            helping.Number("Search Messages", False),
+            helping.NumberFlag("Search", True, default=100),
             helping.MemberFlag("Target", True),
             helping.TextFlag("Contents", True),
         ],
@@ -387,8 +394,23 @@ class Moderation(commands.Cog):
     async def purge(
         self,
         ctx: Context,
-        amount: int,
-        target: commands.flag(max_args=1, override=True),
-        contents: commands.flag(max_args=1, override=True),
+        *,
+        flags: PurgeFlags
     ):
-        pass  # TODO
+        found = 0
+        reg: Re = flags.contents and compile(re.escape(flags.contents))
+
+        def predicate(msg: discord.Message):
+            nonlocal found
+            if reg and not reg.find(msg.content):
+                return False
+
+            if flags.embeds and not msg.embeds:
+                return False
+
+            if flags.users and msg.author in flags.users: # slightly faster than a `not in` check
+                found += 1
+                return True
+        chnl: discord.TextChannel = ctx.channel
+
+        await chnl.purge(limit=flags.limit, check=predicate) # TODO: implement purge myself to make the limit given be the limit removed.
