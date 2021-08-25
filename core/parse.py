@@ -102,8 +102,8 @@ class ParsingContext:
                     ],  # if it doesnt have args, it inserts a blank named arg
                     "actions": rows[0]["actions"],
                     "id": rows[0]["cmd_id"],
-                    "help": rows[0]['cmd_help'],
-                    "group": rows[0]['cmd_group']
+                    "help": rows[0]["cmd_help"],
+                    "group": rows[0]["cmd_group"],
                 }
                 actions.extend(rows[0]["actions"])
 

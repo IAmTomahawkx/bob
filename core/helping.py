@@ -303,11 +303,13 @@ class MemberFlag(FlagHelper):
 
     short = long
 
+
 class Check:
     fast: str
-    priority: int # higher for higher priority
+    priority: int  # higher for higher priority
     description: str
     predicate: Union[Callable[[Context], bool], Awaitable[Callable[[Context], bool]]]
+
 
 class CheckOwnerOnly(Check):
     priority = 100
@@ -317,6 +319,7 @@ class CheckOwnerOnly(Check):
     async def predicate(self, ctx: Context) -> bool:
         return await ctx.bot.is_owner(ctx.author)
 
+
 class CheckAdmin(Check):
     priority = 50
     fast = "Locked to Server Administrators"
@@ -324,4 +327,3 @@ class CheckAdmin(Check):
 
     def predicate(self, ctx: Context) -> bool:
         return ctx.guild and ctx.author.guild_permissions.administrator
-
