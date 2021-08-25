@@ -92,7 +92,9 @@ CREATE TABLE IF NOT EXISTS commands
     cfg_id INTEGER NOT NULL REFERENCES configs(id) ON DELETE CASCADE,
     name TEXT NOT NULL,
     UNIQUE(cfg_id, name),
-    actions INTEGER[] NOT NULL
+    actions INTEGER[] NOT NULL,
+    help TEXT,
+    permission_group TEXT
 );
 CREATE TABLE IF NOT EXISTS command_arguments
 (

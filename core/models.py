@@ -14,6 +14,7 @@ __all__ = (
     "SelfRoleMode",
     "ConfigCounter",
     "ConfigEvent",
+    "Group",
     "Command",
     "CommandArgument",
     "CommandArgumentType",
@@ -145,6 +146,10 @@ class CommandArgumentType(Enum):
     num = "number"
     text = "text"
 
+class Group(TypedDict):
+    name: str
+    roles: List[int]
+    users: List[int]
 
 class CommandArgument(TypedDict):
     name: str
@@ -154,6 +159,8 @@ class CommandArgument(TypedDict):
 
 class Command(TypedDict):
     name: str
+    group: Optional[str]
+    help: Optional[str]
     arguments: List[CommandArgument]
     actions: List[Union[Actions, str]]
 
@@ -175,6 +182,7 @@ class GuildConfig:
         self.error_channel: Optional[int] = None
         self.mute_role: Optional[int] = None
         self.id: Optional[int] = None
+        self.groups: Dict[str, Group] = {}
         self.selfroles: List[SelfRole] = []
         self.counters: Dict[str, ConfigCounter] = {}
         self.events = []

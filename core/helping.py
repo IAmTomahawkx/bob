@@ -1,4 +1,5 @@
-from typing import Any
+from typing import Any, Awaitable, Callable, Union
+from .context import Context
 
 class BaseHelper:
     __slots__ = ("optional", "name", "default")
@@ -300,3 +301,26 @@ class MemberFlag(FlagHelper):
         return f"{self.name}: Member"
 
     short = long
+
+class Check:
+    fast: str
+    priority: int # higher for higher priority
+    description: str
+    predicate: Union[Callable[[Context], bool], Awaitable[Callable[[Context], bool]]]
+
+class CheckOwnerOnly(Check):
+    priority = 100
+    fast = "Owner Only"
+    description = "You must own the bot to use this command"
+
+    async def predicate(self, ctx: Context) -> bool:
+        return await ctx.bot.is_owner(ctx.author)
+
+class CheckAdmin(Check):
+    priority = 50
+    fast = "Locked to Server Administrators"
+    description = "You must be an Administrator to use this command"
+
+    def predicate(self, ctx: Context) -> bool:
+        return ctx.guild and ctx.author.guild_permissions.administrator
+

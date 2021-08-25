@@ -74,6 +74,9 @@ format.history-join = "$target has joined. They have more than 5 previous cases"
 [[command]]
 name = "warn"
 group = "mods"
+help = """
+This is a description that will show up in the help command
+"""
 arguments = [
     { name = "target", type = "user" },
     { name = "reason", type = "text" } # last argument will always get the full remaining text

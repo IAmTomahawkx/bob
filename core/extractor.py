@@ -64,6 +64,9 @@ async def parse_guild_config(cfg: str, ctx: Context) -> GuildConfig:
     if "mute-role" in parsed:
         config.mute_role = await resolve_role(ctx, parsed["mute-role"], "mute-role")
 
+    if "group" in parsed:
+        config.groups = await parse_guild_groups(ctx, parsed["group"])
+
     if "selfrole" in parsed:
         config.selfroles = await parse_guild_selfroles(ctx, parsed["selfrole"])
 
@@ -82,7 +85,7 @@ async def parse_guild_config(cfg: str, ctx: Context) -> GuildConfig:
         config.automod_events = await parse_guild_automod(ctx, parsed["automod"])
 
     if "command" in parsed:
-        config.commands = await parse_guild_commands(parsed["command"])
+        config.commands = await parse_guild_commands(parsed["command"], config.groups)
 
     return config
 
@@ -338,8 +341,62 @@ async def parse_guild_automod(ctx: Context, cfg: Union[Dict[str, Any], List[Dict
 
     return resp
 
+_t = Dict[str, Union[str, List[Union[str, int]]]]
+async def parse_guild_groups(ctx: Context, cfg: Union[_t, List[_t]]) -> Dict[str, Group]:
+    if isinstance(cfg, dict):
+        cfg = [cfg]
 
-async def parse_guild_commands(cfg: Union[Dict[str, Any], List[Dict[str, Any]]]) -> Dict[str, Command]:
+    resp = {}
+
+    print(cfg)
+
+    for i, grp in enumerate(cfg):
+        name = None
+        try:
+            name = str(grp["name"])
+            if name in resp:
+                raise ConfigLoadError(
+                    f"Duplicate groups with name '{name}'"
+                )
+            _roles = grp.get("roles")
+            _users = grp.get("members")
+
+            roles: List[int] = []
+            users: List[int] = []
+
+            contx = f"Group '{name}' (#{i + 1})"
+
+            if _roles:
+                if isinstance(_roles, dict):
+                    raise ConfigLoadError(
+                        f"Unable to parse group '{name}' (#{i + 1}). Unexpected value for 'roles'.")
+                elif isinstance(_roles, (str, int)):
+                    _roles = (_roles, )
+
+                for role in _roles:
+                    roles.append(await resolve_role(ctx, role, contx))
+
+            if _users:
+                if isinstance(_users, dict):
+                    raise ConfigLoadError(
+                        f"Unable to parse group '{name}' (#{i + 1}). Unexpected value for 'members'.")
+                elif isinstance(_users, (str, int)):
+                    _users = [_users]
+
+                users += await resolve_batch_member(ctx, _users, contx)
+
+            resp[name] = Group(name=name, roles=roles, users=users)
+
+        except KeyError as e:
+            if name:
+                raise ConfigLoadError(
+                    f"Unable to parse group '{name}' (#{i + 1}). Missing the {e.args[0]} config key.")
+            else:
+                raise ConfigLoadError(f"unable to parse group #{i + 1}. Missing the {e.args[0]} config key.")
+
+    return resp
+
+async def parse_guild_commands(cfg: Union[Dict[str, Any], List[Dict[str, Any]]], groups: Dict[str, Group]) -> Dict[str, Command]:
     if isinstance(cfg, dict):
         cfg = [cfg]
 
@@ -349,6 +406,13 @@ async def parse_guild_commands(cfg: Union[Dict[str, Any], List[Dict[str, Any]]])
         name = None
         try:
             name = str(cmd["name"])
+            hlp = cmd.get("help") and str(cmd["help"])
+            group = cmd.get("group") or None # prevent people from putting blanks
+            group = group and str(group) # cast it
+            if group and group not in groups:
+                raise ConfigLoadError(
+                    f"Unable to find group '{group}' specified for command '{name}'"
+                )
             context = f"command '{name}'"
             arguments = []
             if not isinstance(cmd["arguments"], list):
@@ -383,7 +447,7 @@ async def parse_guild_commands(cfg: Union[Dict[str, Any], List[Dict[str, Any]]])
 
             actions = [await parse_action(x, context, n) for n, x in enumerate(cmd["actions"])]
 
-            resp[name] = Command(name=name, arguments=arguments, actions=actions)
+            resp[name] = Command(name=name, arguments=arguments, actions=actions, help=hlp, group=group)
         except KeyError as e:
             if name:
                 raise ConfigLoadError(f"Unable to parse command '{name}' (#{i+1}). Missing the {e.args[0]} config key.")
@@ -475,6 +539,28 @@ async def resolve_channel(ctx: Context, arg: Union[str, int], parse_context: str
 
     return channels[0].id
 
+async def resolve_batch_member(ctx: Context, args: List[Union[str, int]], parse_context: str) -> List[int]:
+    ids = [x for x in args if isinstance(x, int)]
+    names = [x for x in args if isinstance(x, str)]
+
+    resp = []
+    if ids:
+        response = await ctx.guild.query_members(user_ids=ids)
+        if len(response) != len(ids):
+            raise ConfigLoadError(f"Unable to resolve some of the given members: {','.join(str(x) for x in ids)} "
+                                  f"({parse_context}).")
+
+        resp.extend(x.id for x in response)
+
+    if names:
+        for x in names: # discord moment
+            response = await ctx.guild.query_members(x)
+            if not response:
+                raise ConfigLoadError(f"Unable to resolve member '{x}' ({parse_context}).")
+
+            resp.append(response[0].id)
+
+    return resp
 
 async def resolve_role(ctx: Context, arg: Union[str, int], parse_context: str) -> int:
     if isinstance(arg, int):

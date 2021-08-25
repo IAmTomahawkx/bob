@@ -1,9 +1,13 @@
+from __future__ import annotations
 import asyncio
-from typing import Optional, Union, Callable
+from typing import Optional, Union, Callable, TYPE_CHECKING
 
 import discord
 from discord.ext import commands
 from . import paginator, players
+
+if TYPE_CHECKING:
+    from .bot import Bot
 
 
 def boolize(string: str) -> bool:
@@ -18,6 +22,8 @@ def boolize(string: str) -> bool:
 
 class Context(commands.Context):
     message: discord.Message
+    bot: Bot
+    author: Union[discord.User, discord.Member]
 
     async def paginate_fields(self, fields, **kwargs):
         pages = paginator.FieldPages(self, entries=fields, **kwargs)

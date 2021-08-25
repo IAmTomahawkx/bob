@@ -88,7 +88,7 @@ class Config(commands.Cog):
         self.bot = bot
 
     async def insert_actions(
-        self, conn: asyncpg.Connection, cfg_id: int, data: list, event=False, automod=False
+        self, conn: asyncpg.Connection, cfg_id: int, data: list, event=False, automod=False, cmd=False
     ) -> list:
         _evens = []
         for _event in data:
@@ -104,6 +104,8 @@ class Config(commands.Cog):
 
             if event:
                 _evens.append((cfg_id, _event["name"], acts))
+            elif cmd:
+                _evens.append((cfg_id, _event["name"], acts, _event["help"], _event["group"]))
             elif automod:
                 _evens.append((cfg_id, _event["event"], acts, _event["ignore"]["roles"], _event["ignore"]["channels"]))
 
@@ -234,13 +236,13 @@ class Config(commands.Cog):
                 await update_msg()
 
                 for cmd, data in cfg.commands.items():
-                    _evens = await self.insert_actions(conn, new_id, [data], event=True)
+                    _evens = await self.insert_actions(conn, new_id, [data], cmd=True)
                     cid = await conn.fetchval(
-                        "INSERT INTO commands (cfg_id, name, actions) VALUES ($1, $2, $3) RETURNING id", *_evens[0]
+                        "INSERT INTO commands (cfg_id, name, actions, help, permission_group) VALUES ($1, $2, $3, $4, $5) RETURNING id", *_evens[0]
                     )
                     await conn.executemany(
                         "INSERT INTO command_arguments (command_id, name, type, optional) VALUES ($1, $2, $3, $4)",
-                        [(cid, x["name"], str(x["type"].name), x["optional"]) for x in data["arguments"]]
+                        [(cid, x["name"], str(x["type"].name), x["optional"]) for x in data["arguments"]] # noqa
                         or [(cid, "", "", False)],
                     )
 
@@ -253,7 +255,7 @@ class Config(commands.Cog):
 
                 if cfg.selfroles:
                     try:
-                        await selfroles.config_hook(cfg, conn)
+                        await selfroles.config_hook(cfg, conn) # noqa
                     except extractor.ConfigLoadError as e:
                         await update_msg(e.msg)
                         raise RuntimeError
@@ -264,7 +266,7 @@ class Config(commands.Cog):
             if not dispatcher:
                 return
 
-            await dispatcher.invalidate_cache_for(ctx.guild.id, conn)
+            await dispatcher.invalidate_cache_for(ctx.guild.id, conn) # noqa
 
     @commands.command("update-config", aliases=["deploy-config"])
     @commands.has_guild_permissions(administrator=True)
@@ -308,7 +310,7 @@ class Config(commands.Cog):
                     ctx.guild.id,
                 )
                 await conn.execute(
-                    "DELETE FROM loggers " "WHERE $1 = (SELECT guild_id FROM configs WHERE id = loggers.cfg_id)",
+                    "DELETE FROM loggers WHERE $1 = (SELECT guild_id FROM configs WHERE id = loggers.cfg_id)",
                     ctx.guild.id,
                 )
 
@@ -325,11 +327,11 @@ class Config(commands.Cog):
                 )
 
                 await conn.execute(
-                    "DELETE FROM automod WHERE cfg_id = (SELECT guild_id FROM configs WHERE id = automod.cfg_id)"
+                    "DELETE FROM automod WHERE $1 = (SELECT guild_id FROM configs WHERE id = automod.cfg_id)", ctx.guild.id
                 )
 
             dispatch = self.bot.get_cog("Dispatch")
             if dispatch:
-                dispatch.remove_cache_for(ctx.guild.id)
+                dispatch.remove_cache_for(ctx.guild.id) # noqa
 
             await ctx.send("Successfully cleared configuration")

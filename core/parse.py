@@ -80,7 +80,9 @@ class ParsingContext:
                 command_arguments.name as arg_name,
                 command_arguments.id as arg_id,
                 c.id as cmd_id, 
-                c.name as cmd_name
+                c.name as cmd_name,
+                c.help as cmd_help,
+                c.permission_group as cmd_group
             FROM command_arguments
             INNER JOIN commands c on command_arguments.command_id = c.id
             WHERE c.cfg_id = $1
@@ -100,6 +102,8 @@ class ParsingContext:
                     ],  # if it doesnt have args, it inserts a blank named arg
                     "actions": rows[0]["actions"],
                     "id": rows[0]["cmd_id"],
+                    "help": rows[0]['cmd_help'],
+                    "group": rows[0]['cmd_group']
                 }
                 actions.extend(rows[0]["actions"])
 
