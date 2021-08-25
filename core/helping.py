@@ -1,6 +1,7 @@
 from typing import Any, Awaitable, Callable, Union
 from .context import Context
 
+
 class BaseHelper:
     __slots__ = ("optional", "name", "default")
     description: str

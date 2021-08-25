@@ -16,12 +16,16 @@ if TYPE_CHECKING:
 
 MSGDAYS_RE = re.compile("(?:--delete-message-days|--dmd|--del)\s+(\d)")
 
+
 class PurgeFlags(commands.FlagConverter, case_insensitive=True):
-    users: Tuple[discord.User, ...] = commands.flag(aliases=['user', 'u', 'member', 'members', 'm'], default=lambda _: [])
-    contents: Optional[str] = commands.flag(aliases=['content', 'c'])
+    users: Tuple[discord.User, ...] = commands.flag(
+        aliases=["user", "u", "member", "members", "m"], default=lambda _: []
+    )
+    contents: Optional[str] = commands.flag(aliases=["content", "c"])
     reason: Optional[str]
-    embeds: Optional[bool] = commands.flag(aliases=['e'], default=lambda _: False)
+    embeds: Optional[bool] = commands.flag(aliases=["e"], default=lambda _: False)
     limit: Optional[int] = 1000
+
 
 def setup(bot: Bot):
     bot.add_cog(Moderation(bot))
@@ -391,12 +395,7 @@ class Moderation(commands.Cog):
     @commands.bot_has_guild_permissions(manage_messages=True)
     @commands.guild_only()
     @commands.has_permissions(manage_messages=True)
-    async def purge(
-        self,
-        ctx: Context,
-        *,
-        flags: PurgeFlags
-    ):
+    async def purge(self, ctx: Context, *, flags: PurgeFlags):
         found = 0
         reg: Re = flags.contents and compile(re.escape(flags.contents))
 
@@ -408,9 +407,12 @@ class Moderation(commands.Cog):
             if flags.embeds and not msg.embeds:
                 return False
 
-            if flags.users and msg.author in flags.users: # slightly faster than a `not in` check
+            if flags.users and msg.author in flags.users:  # slightly faster than a `not in` check
                 found += 1
                 return True
+
         chnl: discord.TextChannel = ctx.channel
 
-        await chnl.purge(limit=flags.limit, check=predicate) # TODO: implement purge myself to make the limit given be the limit removed.
+        await chnl.purge(
+            limit=flags.limit, check=predicate
+        )  # TODO: implement purge myself to make the limit given be the limit removed.
