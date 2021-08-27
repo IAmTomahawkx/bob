@@ -32,6 +32,8 @@ def setup(bot: Bot):
 
 
 class Moderation(commands.Cog):
+    hidden = False
+
     def __init__(self, bot: Bot):
         self.bot = bot
 
@@ -49,7 +51,8 @@ class Moderation(commands.Cog):
             )
 
     @commands.command(
-        name="warn", usage=[helping.GreedyMember("Target(s)", False), helping.RemainderText("Reason", True)]
+        name="warn", usage=[helping.GreedyMember("Target(s)", False), helping.RemainderText("Reason", True)],
+        extras={"checks": [helping.CheckModerator()]}
     )
     @commands.guild_only()
     @commands.has_permissions(manage_messages=True)
@@ -112,6 +115,7 @@ class Moderation(commands.Cog):
             helping.Timestamp("Ban Until", True),
             helping.RemainderText("Reason", True),
         ],
+        extras={"checks": [helping.CheckBanModerator(), helping.CheckBotHasPermission(ban_members=True)]}
     )
     @commands.guild_only()
     @commands.has_permissions(ban_members=True)
@@ -120,7 +124,8 @@ class Moderation(commands.Cog):
         self, ctx: Context, users: commands.Greedy[discord.Member], *, timestamp: time.OptionalUserFriendlyTime = None
     ):
         """
-        Bans user(s) from the server, creating a case for each one. Optionally will create a timer to unban them
+        Bans user(s) from the server, creating a case for each one.
+        Optionally will create a timer to unban them.
 
         In addition to the documented arguments, this command takes an optional flag argument, --delete-message-days (or --dmd for short),
         which can be used to specify how many days worth of messages to delete. This can be anywhere from 0 to 7 (discord limitation).
@@ -213,7 +218,8 @@ class Moderation(commands.Cog):
                 await ctx.reply(f"Banned {users[0]}", mention_author=False, delete_after=5)
 
     @commands.command(
-        name="kick", usage=[helping.GreedyMember("Target(s)", False), helping.RemainderText("Reason", True)]
+        name="kick", usage=[helping.GreedyMember("Target(s)", False), helping.RemainderText("Reason", True)],
+        extras={"checks": [helping.CheckKickModerator(), helping.CheckBotHasPermission(kick_members=True)]}
     )
     @commands.guild_only()
     @commands.has_permissions(kick_members=True)
@@ -288,6 +294,7 @@ class Moderation(commands.Cog):
             helping.Timestamp("Mute Until", True),
             helping.RemainderText("Reason", True),
         ],
+        extras={"checks": [helping.CheckRoleManage(), helping.CheckBotHasPermission(manage_roles=True)]}
     )
     @commands.bot_has_permissions(manage_roles=True)
     @commands.has_permissions(manage_roles=True)
@@ -391,11 +398,15 @@ class Moderation(commands.Cog):
             helping.MemberFlag("Target", True),
             helping.TextFlag("Contents", True),
         ],
+        extras={"checks": [helping.CheckBotHasPermission(manage_messages=True), helping.CheckModerator()]}
     )
-    @commands.bot_has_guild_permissions(manage_messages=True)
+    @commands.bot_has_permissions(manage_messages=True)
     @commands.guild_only()
     @commands.has_permissions(manage_messages=True)
     async def purge(self, ctx: Context, *, flags: PurgeFlags):
+        """
+        Purges a channel for the given criteria.
+        """
         found = 0
         reg: Re = flags.contents and compile(re.escape(flags.contents))
 
@@ -410,6 +421,8 @@ class Moderation(commands.Cog):
             if flags.users and msg.author in flags.users:  # slightly faster than a `not in` check
                 found += 1
                 return True
+
+            return False
 
         chnl: discord.TextChannel = ctx.channel
 

@@ -24,6 +24,8 @@ class CurrentTask:
 
 
 class Timers(commands.Cog):
+    hidden = True
+
     def __init__(self, bot: Bot):
         self.bot = bot
         self.processor = bot.loop.create_task(self.process_tasks())

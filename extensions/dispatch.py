@@ -15,6 +15,7 @@ def setup(bot: Bot):
 
 
 class Dispatch(commands.Cog):
+    hidden = True
     def __init__(self, bot: Bot):
         self.bot = bot
         self.cached_triggers = {}

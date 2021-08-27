@@ -62,6 +62,7 @@ v = {
 class Idevision(commands.Cog):
     category = "misc"
     url = "https://idevision.net/api/"
+    hidden = False
 
     def __init__(self, bot):
         self.bot = bot

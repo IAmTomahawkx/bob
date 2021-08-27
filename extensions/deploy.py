@@ -4,7 +4,7 @@ import itertools
 import ujson
 from discord.ext import commands
 from core.bot import Bot
-from core import extractor, context, converters
+from core import extractor, context, converters, helping
 from core.models import *
 from core.views import Confirmation
 
@@ -84,6 +84,7 @@ def get_action_args(act: Actions) -> tuple:
 
 
 class Config(commands.Cog):
+    hidden = False
     def __init__(self, bot: Bot):
         self.bot = bot
 
@@ -268,7 +269,7 @@ class Config(commands.Cog):
 
             await dispatcher.invalidate_cache_for(ctx.guild.id, conn) # noqa
 
-    @commands.command("update-config", aliases=["deploy-config"])
+    @commands.command("update-config", aliases=["deploy-config"], usage=[helping.ConfigFile("Config File", False)], extras={"checks": [helping.CheckAdmin()]})
     @commands.has_guild_permissions(administrator=True)
     async def update_config(self, ctx: context.Context, *, config: converters.ConfigFileConverter = None):
         if not config and not ctx.message.attachments:
@@ -288,9 +289,14 @@ class Config(commands.Cog):
         except RuntimeError:
             pass
 
-    @commands.command("clear-config")
+    @commands.command("clear-config", extras={"checks": [helping.CheckAdmin()]})
     @commands.has_guild_permissions(administrator=True)
     async def clear_config(self, ctx: context.Context):
+        """
+        Deploys
+        :param ctx:
+        :return:
+        """
         conf = Confirmation([ctx.author.id])
         rsp: discord.Message = await ctx.reply(
             "Are you sure you want to completely clear the configuration?", view=conf, mention_author=False

@@ -11,6 +11,7 @@ def setup(bot):
 
 
 class Bull(commands.Cog):
+    hidden = True
     def __init__(self, bot):
         self.bot = bot
         pth = pathlib.Path("assets", "pings.json")

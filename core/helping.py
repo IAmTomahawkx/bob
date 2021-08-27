@@ -30,14 +30,14 @@ class Text(BaseHelper):
         if self.optional:
             return "[Text]"
 
-        return "Text"
+        return "<Text>"
 
     @property
     def long(self) -> str:
         if self.optional:
             return f"[{self.name}: Text]"
 
-        return f"{self.name}: Text"
+        return f"<{self.name}: Text>"
 
 
 class RemainderText(BaseHelper):
@@ -51,14 +51,14 @@ class RemainderText(BaseHelper):
         if self.optional:
             return "[Text]"
 
-        return "Text"
+        return "<Text>"
 
     @property
     def long(self) -> str:
         if self.optional:
             return f"[{self.name}: Text]"
 
-        return f"{self.name}: Text"
+        return f"<{self.name}: Text>"
 
 
 class Timestamp(BaseHelper):
@@ -70,7 +70,9 @@ class Timestamp(BaseHelper):
         if self.optional:
             return "[Timestamp]"
 
-        return "Timestamp"
+        return "<Timestamp>"
+
+    long = short
 
 
 class Number(BaseHelper):
@@ -82,14 +84,14 @@ class Number(BaseHelper):
         if self.optional:
             return "[Number]"
 
-        return "Channel"
+        return "<Channel>"
 
     @property
     def long(self) -> str:
         if self.optional:
             return f"[{self.name}: Channel(s)]"
 
-        return f"{self.name}: Channel(s)"
+        return f"<{self.name}: Channel(s)>"
 
 
 class Member(BaseHelper):
@@ -101,14 +103,14 @@ class Member(BaseHelper):
         if self.optional:
             return "[Member]"
 
-        return "Member"
+        return "<Member>"
 
     @property
     def long(self) -> str:
         if self.optional:
             return f"[{self.name}: Member]"
 
-        return f"{self.name}: Member"
+        return f"<{self.name}: Member>"
 
 
 class GreedyMember(BaseHelper):
@@ -120,14 +122,14 @@ class GreedyMember(BaseHelper):
         if self.optional:
             return "[Member(s)]"
 
-        return "Member(s)"
+        return "<Member(s)>"
 
     @property
     def long(self) -> str:
         if self.optional:
             return f"[{self.name}: Member(s)]"
 
-        return f"{self.name}: Member(s)"
+        return f"<{self.name}: Member(s)>"
 
 
 class Channel(BaseHelper):
@@ -139,14 +141,14 @@ class Channel(BaseHelper):
         if self.optional:
             return "[Channel]"
 
-        return "Channel"
+        return "<Channel>"
 
     @property
     def long(self) -> str:
         if self.optional:
             return f"[{self.name}: Channel]"
 
-        return f"{self.name}: Channel"
+        return f"<{self.name}: Channel>"
 
 
 class GreedyChannel(BaseHelper):
@@ -158,14 +160,14 @@ class GreedyChannel(BaseHelper):
         if self.optional:
             return "[Channel(s)]"
 
-        return "Channel(s)"
+        return "<Channel(s)>"
 
     @property
     def long(self) -> str:
         if self.optional:
             return f"[{self.name}: Channel(s)]"
 
-        return f"{self.name}: Channel(s)"
+        return f"<{self.name}: Channel(s)>"
 
 
 class Role(BaseHelper):
@@ -177,14 +179,14 @@ class Role(BaseHelper):
         if self.optional:
             return "[Role]"
 
-        return "Role"
+        return "<Role>"
 
     @property
     def long(self) -> str:
         if self.optional:
             return f"[{self.name}: Role]"
 
-        return f"{self.name}: Role"
+        return f"<{self.name}: Role>"
 
 
 class GreedyRole(BaseHelper):
@@ -196,14 +198,14 @@ class GreedyRole(BaseHelper):
         if self.optional:
             return "[Role(s)]"
 
-        return "Role(s)"
+        return "<Role(s)>"
 
     @property
     def long(self) -> str:
         if self.optional:
             return f"[{self.name}: Role(s)]"
 
-        return f"{self.name}: Role(s)"
+        return f"<{self.name}: Role(s)>"
 
 
 class User(BaseHelper):
@@ -215,14 +217,14 @@ class User(BaseHelper):
         if self.optional:
             return "[User]"
 
-        return "User"
+        return "<User>"
 
     @property
     def long(self) -> str:
         if self.optional:
             return f"[{self.name}: User]"
 
-        return f"{self.name}: User"
+        return f"<{self.name}: User>"
 
 
 class GreedyUser(BaseHelper):
@@ -234,14 +236,14 @@ class GreedyUser(BaseHelper):
         if self.optional:
             return "[User(s)]"
 
-        return "User(s)"
+        return "<User(s)>"
 
     @property
     def long(self) -> str:
         if self.optional:
             return f"[{self.name}: User(s)]"
 
-        return f"{self.name}: User(s)"
+        return f"<{self.name}: User(s)>"
 
 
 class FlagHelper(BaseHelper):
@@ -257,7 +259,7 @@ class NumberFlag(FlagHelper):
         if self.optional:
             return f"[{self.name}: Number]"
 
-        return f"{self.name}: Number"
+        return f"<{self.name}: Number>"
 
     short = long
 
@@ -271,7 +273,7 @@ class TextFlag(FlagHelper):
         if self.optional:
             return f"[{self.name}: Text]"
 
-        return f"{self.name}: Text"
+        return f"<{self.name}: Text>"
 
     short = long
 
@@ -285,7 +287,7 @@ class UserFlag(FlagHelper):
         if self.optional:
             return f"[{self.name}: User]"
 
-        return f"{self.name}: User"
+        return f"<{self.name}: User>"
 
     short = long
 
@@ -299,9 +301,31 @@ class MemberFlag(FlagHelper):
         if self.optional:
             return f"[{self.name}: Member]"
 
-        return f"{self.name}: Member"
+        return f"<{self.name}: Member>"
 
     short = long
+
+# custom converters
+
+class ConfigFile(BaseHelper):
+    description = "A config file. This can be a code block, a hasteb.in or mystb.in link, or a file upload."
+    example = "https://mystb.in/AlpacaReefsAtlantic"
+
+    @property
+    def short(self) -> str:
+        if self.optional:
+            return "[ConfigFile]"
+
+        return "ConfigFile"
+
+    @property
+    def long(self) -> str:
+        if self.optional:
+            return f"[{self.name}: ConfigFile]"
+
+        return f"<{self.name}: ConfigFile>"
+
+# checks
 
 class Check:
     fast: str
@@ -325,3 +349,57 @@ class CheckAdmin(Check):
     def predicate(self, ctx: Context) -> bool:
         return ctx.guild and ctx.author.guild_permissions.administrator
 
+class CheckModerator(Check):
+    priority = 30
+    fast = "Locked to Moderators"
+    description = "You must be a Moderator (Manage Messages) to use this command"
+
+    def predicate(self, ctx: Context) -> bool:
+        return ctx.guild and ctx.channel.permissions_for(ctx.author).manage_messages
+
+class CheckRoleManage(Check):
+    priority = 33
+    fast = "Locked to Moderators"
+    description = "You must have the `Manage Roles` permission to use this command"
+
+    def predicate(self, ctx: Context) -> bool:
+        return ctx.guild and ctx.author.guild_permissions.manage_roles
+
+class CheckKickModerator(Check):
+    priority = 34
+    fast = "Locked to Moderators"
+    description = "You must have the `Kick Members` permission to use this command"
+
+    def predicate(self, ctx: Context) -> bool:
+        return ctx.guild and ctx.author.guild_permissions.kick_members
+
+class CheckBanModerator(Check):
+    priority = 35
+    fast = "Locked to Moderators"
+    description = "You must have the `Ban Members` permission to use this command"
+
+    def predicate(self, ctx: Context) -> bool:
+        return ctx.guild and ctx.author.guild_permissions.ban_members
+
+class CheckBotHasPermission(Check):
+    priority = 55
+
+    def __init__(self, **flags):
+        self.flags = flags
+
+    @property
+    def fast(self):
+        return "Bot requires certain permissions"
+
+    @property
+    def description(self):
+        return f"Bot requires the following permission{'s' if len(self.flags) > 1 else ''}: {', '.join(' '.join(x.split('_')).title() for x in self.flags)}"
+
+    def predicate(self, ctx: Context) -> bool:
+        guild = ctx.guild
+        me = guild.me if guild is not None else ctx.bot.user
+        permissions = ctx.channel.permissions_for(me)  # type: ignore
+
+        missing = tuple(perm for perm, value in self.flags.items() if getattr(permissions, perm) != value) # pulled from dpy
+
+        return not bool(missing)
