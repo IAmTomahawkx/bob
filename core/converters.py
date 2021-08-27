@@ -1,12 +1,14 @@
-import aiohttp
-
+from __future__ import annotations
 from typing import Optional
-from discord.ext.commands import Converter, BadArgument
-from .context import Context
 
+import aiohttp
+from discord.ext.commands import Converter, BadArgument
 from jishaku.codeblocks import codeblock_converter
 
-__all__ = ("ConfigFileConverter",)
+from deps import safe_regex as re
+from .context import Context
+
+__all__ = ("ConfigFileConverter", "RegexConverter")
 
 
 class ConfigFileConverter(Converter):
@@ -33,3 +35,14 @@ class ConfigFileConverter(Converter):
 
         arg = codeblock_converter(argument)
         return arg.content
+
+class RegexConverter(Converter):
+    regex: Optional[re.Re]
+    async def convert(self, ctx: Context, argument: str) -> RegexConverter:
+        try:
+            self.regex = re.compile(argument)
+        except re.CompileError as e:
+            bs = '\\`'
+            raise BadArgument(f"`{argument.replace('`', bs)}` is not a valid regex. {' '.join(e.args)}")
+        else:
+            return self
