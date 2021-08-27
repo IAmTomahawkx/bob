@@ -239,11 +239,12 @@ class Config(commands.Cog):
                 for cmd, data in cfg.commands.items():
                     _evens = await self.insert_actions(conn, new_id, [data], cmd=True)
                     cid = await conn.fetchval(
-                        "INSERT INTO commands (cfg_id, name, actions, help, permission_group) VALUES ($1, $2, $3, $4, $5) RETURNING id", *_evens[0]
+                        "INSERT INTO commands (cfg_id, name, actions, help, permission_group) VALUES ($1, $2, $3, $4, $5) RETURNING id",
+                        *_evens[0],
                     )
                     await conn.executemany(
                         "INSERT INTO command_arguments (command_id, name, type, optional) VALUES ($1, $2, $3, $4)",
-                        [(cid, x["name"], str(x["type"].name), x["optional"]) for x in data["arguments"]] # noqa
+                        [(cid, x["name"], str(x["type"].name), x["optional"]) for x in data["arguments"]]  # noqa
                         or [(cid, "", "", False)],
                     )
 
@@ -256,7 +257,7 @@ class Config(commands.Cog):
 
                 if cfg.selfroles:
                     try:
-                        await selfroles.config_hook(cfg, conn) # noqa
+                        await selfroles.config_hook(cfg, conn)  # noqa
                     except extractor.ConfigLoadError as e:
                         await update_msg(e.msg)
                         raise RuntimeError
@@ -267,7 +268,7 @@ class Config(commands.Cog):
             if not dispatcher:
                 return
 
-            await dispatcher.invalidate_cache_for(ctx.guild.id, conn) # noqa
+            await dispatcher.invalidate_cache_for(ctx.guild.id, conn)  # noqa
 
     @commands.command("update-config", aliases=["deploy-config"], usage=[helping.ConfigFile("Config File", False)], extras={"checks": [helping.CheckAdmin()]})
     @commands.has_guild_permissions(administrator=True)
@@ -333,11 +334,12 @@ class Config(commands.Cog):
                 )
 
                 await conn.execute(
-                    "DELETE FROM automod WHERE $1 = (SELECT guild_id FROM configs WHERE id = automod.cfg_id)", ctx.guild.id
+                    "DELETE FROM automod WHERE $1 = (SELECT guild_id FROM configs WHERE id = automod.cfg_id)",
+                    ctx.guild.id,
                 )
 
             dispatch = self.bot.get_cog("Dispatch")
             if dispatch:
-                dispatch.remove_cache_for(ctx.guild.id) # noqa
+                dispatch.remove_cache_for(ctx.guild.id)  # noqa
 
             await ctx.send("Successfully cleared configuration")

@@ -146,10 +146,12 @@ class CommandArgumentType(Enum):
     num = "number"
     text = "text"
 
+
 class Group(TypedDict):
     name: str
     roles: List[int]
     users: List[int]
+
 
 class CommandArgument(TypedDict):
     name: str
