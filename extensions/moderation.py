@@ -8,11 +8,14 @@ from discord.ext import commands
 
 from core import helping, time
 from core.context import Context
+from core.converters import RegexConverter
 from core.parse import ParsingContext
 from deps.safe_regex import Re, compile
 
 if TYPE_CHECKING:
     from core.bot import Bot
+    from extensions.dispatch import Dispatch
+    from extensions.timerdispatcher import Timers
 
 MSGDAYS_RE = re.compile("(?:--delete-message-days|--dmd|--del)\s+(\d)")
 
@@ -38,7 +41,7 @@ class Moderation(commands.Cog):
         self.bot = bot
 
     async def dispatch_automod(self, ctx: Context, event: str, conn: asyncpg.Connection, kwargs: dict):
-        dispatch = self.bot.get_cog("Dispatch")
+        dispatch: Optional[Dispatch] = self.bot.get_cog("Dispatch")
         if not dispatch:
             return
 
@@ -160,7 +163,7 @@ class Moderation(commands.Cog):
         audit_reason = f"{reason} (Action by {ctx.author} {ctx.author.id})"
 
         fails = []
-        dispatch = self.bot.get_cog("Dispatch")
+        dispatch: Optional[Dispatch] = self.bot.get_cog("Dispatch")
         if not dispatch:
             raise RuntimeError("Failed to acquire the dispatcher, cannot proceed. Please report this")
 
@@ -173,7 +176,7 @@ class Moderation(commands.Cog):
                     continue
 
                 if timestamp and timestamp.dt:
-                    timers = ctx.bot.get_cog("Timers")
+                    timers: Optional[Timers] = ctx.bot.get_cog("Timers")
                     if not timers:
                         await ctx.send(
                             "Failed to schedule the unban timer! Please report this error! "
@@ -235,7 +238,7 @@ class Moderation(commands.Cog):
         audit_reason = reason + f" (Action by {ctx.author} {ctx.author.id})"
         fails = []
 
-        dispatch = self.bot.get_cog("Dispatch")
+        dispatch: Optional[Dispatch] = self.bot.get_cog("Dispatch")
         if not dispatch:
             raise RuntimeError("Failed to acquire dispatcher, cannot continue. Please report this")
 
@@ -322,7 +325,7 @@ class Moderation(commands.Cog):
         audit_reason = reason + f" (action by {ctx.author} {ctx.author.id})"
 
         context = None
-        dispatch = self.bot.get_cog("Dispatch")
+        dispatch: Optional[Dispatch] = self.bot.get_cog("Dispatch")
         if dispatch:
             context = dispatch.ctx_cache.get(ctx.guild.id)
 
@@ -344,7 +347,7 @@ class Moderation(commands.Cog):
         async with self.bot.db.acquire() as conn:
             for user in users:
                 if dt:
-                    timers = self.bot.get_cog("Timers")
+                    timers: Optional[Timers] = self.bot.get_cog("Timers")
                     if not timers:
                         await ctx.send(
                             "Failed to schedule the unmute timer! Please report this error! "
