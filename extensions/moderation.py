@@ -1,10 +1,12 @@
 from __future__ import annotations
+import asyncio
 import re
-from typing import TYPE_CHECKING, Optional, Tuple
+from typing import TYPE_CHECKING, Optional, Tuple, List, Union, Literal
 
 import asyncpg
 import discord
 from discord.ext import commands
+from discord.ext.commands import converter
 
 from core import helping, time
 from core.context import Context
@@ -21,13 +23,53 @@ MSGDAYS_RE = re.compile("(?:--delete-message-days|--dmd|--del)\s+(\d)")
 
 
 class PurgeFlags(commands.FlagConverter, case_insensitive=True):
-    users: Tuple[discord.User, ...] = commands.flag(
+    users: Tuple[discord.User] = commands.flag(
         aliases=["user", "u", "member", "members", "m"], default=lambda _: []
     )
     contents: Optional[str] = commands.flag(aliases=["content", "c"])
     reason: Optional[str]
     embeds: Optional[bool] = commands.flag(aliases=["e"], default=lambda _: False)
     limit: Optional[int] = 1000
+
+
+class _MassBanModeConverter(commands.Converter):
+    MODES = {
+        "any": 0,
+        "all": 1,
+        "none": 2
+    }
+    REVERSED = {v: k for k, v in MODES.items()}
+
+    async def convert(self, ctx: Context, argument: str) -> converter.T_co:
+        argument = argument.lower()
+        if argument not in self.MODES:
+            raise commands.BadArgument(f"Mode flag expected one of 'any', 'all', or 'none'. Got '{argument}'")
+
+        return self.MODES[argument]
+
+class MassBanFlags(commands.FlagConverter, case_insenstive=True):
+    reason: Optional[str]
+
+    users: Tuple[discord.User, ...] = commands.flag(aliases=["user", "u", "member", "members", "m"], default=lambda _: [])
+    no_avatar: Optional[bool] = commands.flag(name="no-avatar", aliases=["noavy", "default-avatar", "defaultavy", "na", "da"])
+    no_roles: Optional[bool] = commands.flag(name="no-roles", aliases=["norole", "nr"])
+    recent_joined: Optional[time.PastUserFriendlyTime] = commands.flag(name="joined", aliases=["j", "rj"])
+    recent_created: Optional[time.PastUserFriendlyTime] = commands.flag(name="created", aliases=["c", "rc"])
+    bots: bool = False
+    name: Optional[RegexConverter]
+
+    channel: Optional[discord.TextChannel]
+    search: Optional[int] = 100
+
+    regex: Optional[RegexConverter] = commands.flag(aliases=["r"])
+    contents: Optional[str] = commands.flag(aliases=["content"])
+    embeds: Optional[bool]
+    files: Optional[bool]
+    mention_count: Optional[int] = commands.flag(name="mention-count", aliases=["mc"])
+
+    dry_run: Optional[bool] = commands.flag(name="dry-run", aliases=["dr", "show", "no-ban"])
+    delete_message_days: Literal[0, 1, 2, 3, 4, 5, 6, 7] = commands.flag(name="delete-message-days", aliases=["d", "dmd"], default=lambda _: 1)
+    mode: _MassBanModeConverter = _MassBanModeConverter.MODES['any']
 
 
 def setup(bot: Bot):
@@ -152,7 +194,7 @@ class Moderation(commands.Cog):
             if dmd:
                 msgdays = int(dmd.group(1))
                 if 0 > msgdays > 7:
-                    return ctx.reply(
+                    return await ctx.reply(
                         f"The delete message days flag value must be between 0 and 7 (including 0/7)",
                         delete_message_after=10,
                         mention_author=False,
@@ -182,10 +224,10 @@ class Moderation(commands.Cog):
                             "Failed to schedule the unban timer! Please report this error! "
                             "Proceeding to ban without unban timer"
                         )
-
-                    await timers.schedule_task(
-                        "ban_complete", timestamp.dt, conn=conn, guild_id=ctx.guild.id, user_id=user.id
-                    )
+                    else:
+                        await timers.schedule_task(
+                            "ban_complete", timestamp.dt, conn=conn, guild_id=ctx.guild.id, user_id=user.id
+                        )
 
                 dispatch.recent_events[(ctx.guild.id, user.id, "ban")] = (
                     user,
@@ -287,8 +329,124 @@ class Moderation(commands.Cog):
     @commands.has_permissions(ban_members=True)
     @commands.has_guild_permissions(ban_members=True)
     @commands.guild_only()
-    async def massban(self, ctx: Context):  # TODO: massban args
-        pass
+    async def massban(self, ctx: Context, *, flags: MassBanFlags):
+        print(flags, flags)
+
+        targets: List[Union[discord.Member, discord.User]] = []
+
+        if flags.users:
+            targets.extend(flags.users)
+
+        async def channelcheck():
+            pass
+
+        usercheck = channelcheck
+        if flags.mode == _MassBanModeConverter.MODES['any']:
+            strategy = any
+        elif flags.mode == _MassBanModeConverter.MODES['all']:
+            strategy = all
+        elif flags.mode == _MassBanModeConverter.MODES['none']:
+            strategy = lambda x: not any(x)
+        else:
+            raise RuntimeError(f"Unknown mode: {flags.mode}")
+
+        if flags.channel:
+            checks = [
+                lambda m: ctx.guild.owner_id == ctx.author.id or ctx.author.top_role < m.author.top_role
+            ]
+            if not flags.bots:
+                checks.append(lambda m: not m.author.bot)
+
+            if flags.contents:
+                checks.append(lambda m: flags.contents in m.content)
+
+            if flags.regex:
+                checks.append(lambda m: flags.regex.regex.is_match(m.content))
+
+            if flags.embeds is not None:
+                checks.append(lambda m: bool(m.embeds) is flags.embeds)
+
+            if flags.files is not None:
+                checks.append(lambda m: bool(m.files) is flags.files)
+
+            if flags.mention_count is not None:
+                checks.append(lambda m: len(m.mentions) >= flags.mention_count)
+
+            if checks:
+                async def channelcheck():
+                    async for msg in flags.channel.history(limit=max(1, min(flags.search, 2000))):
+                        if strategy(msg):
+                            targets.append(msg.author)
+
+        if flags.name or flags.recent_created or flags.recent_joined \
+                or flags.no_avatar is not None or flags.no_roles is not None:
+
+            userchecks = []
+            if not flags.bots:
+                userchecks.append(lambda u: not u.bot)
+
+            if flags.name:
+                userchecks.append(lambda u: flags.name.regex.is_match(u.name))
+
+            if flags.no_roles is not None:
+                userchecks.append(lambda u: bool(u.roles) is not flags.no_roles)
+
+            if flags.no_avatar is not None:
+                userchecks.append(lambda u: bool(u.avatar) is not flags.no_avatar)
+
+            if flags.recent_joined:
+                userchecks.append(lambda u: u.joined_at < flags.recent_joined.dt)
+
+            if flags.recent_created:
+                userchecks.append(lambda u: u.created_at < flags.recent_created.dt)
+
+            if userchecks:
+                async def usercheck():
+                    if not ctx.guild.chunked:
+                        await ctx.guild.chunk()
+
+                    for user in ctx.guild.members:
+                        await asyncio.sleep(0) # large guilds could potentially freeze the bot
+                        if strategy(userchecks):
+                            targets.append(user)
+
+        async with ctx.typing():
+            await asyncio.wait((
+                channelcheck(),
+                usercheck()
+            ), return_when=asyncio.ALL_COMPLETED)
+
+            if not targets:
+                return await ctx.reply("No targets matched the given parameters", mention_author=False)
+
+            if flags.dry_run:
+                return await ctx.paginate_text(
+                    "\n".join(f"{x.mention} - {x} ({x.id})" for x in targets),
+                    msg_kwargs={"allowed_mentions": discord.AllowedMentions.none()}
+                )
+
+            reason = flags.reason or "No reason provided"
+            audit_reason = reason + f" (action by {ctx.author}, {ctx.author.id})"
+            fails = []
+
+            dispatch: Optional[Dispatch] = self.bot.get_cog("Dispatch")
+            if not dispatch:
+                raise RuntimeError("Failed to acquire the dispatcher, cannot proceed. Please report this")
+
+            for target in targets:
+                try:
+                    await target.ban(reason=audit_reason, delete_message_days=flags.delete_message_days)
+                except discord.HTTPException:
+                    fails.append(target)
+                    continue
+
+                dispatch.recent_events[(ctx.guild.id, target.id, "ban")] = (
+                    target,
+                    ctx.author,
+                    reason,
+                    ctx.message.jump_url,
+                    None
+                )
 
     @commands.command(
         name="mute",
