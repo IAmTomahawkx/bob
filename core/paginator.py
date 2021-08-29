@@ -1,14 +1,15 @@
 import asyncio
+from typing import Dict, Any, Optional, List
 
 import discord
+from discord import ui # shortcut because I'm lazy
 from discord.ext.commands import Paginator as CommandPaginator, CommandError
 
 
 class CannotPaginate(CommandError):
     pass
 
-
-class Pages:
+class Pages(ui.View):
     """Implements a paginator that queries the user for the
     pagination interface.
     Pages are 1-index based, not 0-index based.
@@ -34,6 +35,8 @@ class Pages:
         Our permissions for the channel.
     """
 
+    message: Optional[discord.Message] = None
+
     def __init__(
         self,
         ctx,
@@ -49,21 +52,23 @@ class Pages:
         author_url=None,
         stop=False,
     ):
+        super().__init__()
         self.bot = ctx.bot
         self.stoppable = stop
         self.ctx = ctx
         self.delete_after = delete_after
         self.entries = entries
         self.embed_author = author, author_url
-        self.message = ctx.message
         self.channel = ctx.channel
         self.author = ctx.author
         self.nocount = nocount
         self.title = title
         self.per_page = per_page
+
         pages, left_over = divmod(len(self.entries), self.per_page)
         if left_over:
             pages += 1
+
         self.maximum_pages = pages
         self.embed = discord.Embed(colour=embed_color)
         self.paginating = len(entries) > per_page
@@ -89,26 +94,25 @@ class Pages:
         if not self.permissions.send_messages:
             raise CannotPaginate("Bot cannot send messages.")
 
-        if self.paginating:
-            # verify we can actually use the pagination session
-            if not self.permissions.add_reactions:
-                raise CannotPaginate("Bot does not have add reactions permission.")
+    def setup_buttons(self):
+        self.clear_items()
+        for (emoji, btn) in self.reaction_emojis:
+            btn = ui.Button(emoji=emoji)
+            btn.callback = btn
+            self.add_item(btn)
 
-            if not self.permissions.read_message_history:
-                raise CannotPaginate("Bot does not have Read Message History permission.")
-
-    def get_page(self, page):
+    def get_page(self, page: int):
         base = (page - 1) * self.per_page
         return self.entries[base : base + self.per_page]
 
-    def get_content(self, entries, page, *, first=False):
+    def get_content(self, entries: List[Any], page: int, *, first=False):
         return None
 
-    def get_embed(self, entries, page, *, first=False):
+    def get_embed(self, entries: List[Any], page: int, *, first=False):
         self.prepare_embed(entries, page, first=first)
         return self.embed
 
-    def prepare_embed(self, entries, page, *, first=False):
+    def prepare_embed(self, entries: List[Any], page: int, *, first=False):
         p = []
         for index, entry in enumerate(entries, 1 + ((page - 1) * self.per_page)):
             if self.nocount:
@@ -133,57 +137,54 @@ class Pages:
         self.embed.description = "\n".join(p)
         self.embed.title = self.title or discord.Embed.Empty
 
-    async def show_page(self, page, *, first=False):
+    async def show_page(self, page: int, *, first=False, msg_kwargs: Dict[str, Any] = None):
         self.current_page = page
         entries = self.get_page(page)
         content = self.get_content(entries, page, first=first)
         embed = self.get_embed(entries, page, first=first)
 
         if not self.paginating:
-            return await self.channel.send(content=content, embed=embed)
+            return await self.channel.send(content=content, embed=embed, view=self, **msg_kwargs or {})
 
         if not first:
-            await self.message.edit(content=content, embed=embed)
+            await self.message.edit(content=content, embed=embed, view=self)
             return
 
-        self.message = await self.channel.send(content=content, embed=embed)
-        for (reaction, _) in self.reaction_emojis:
-            if self.maximum_pages == 2 and reaction in ("\u23ed", "\u23ee"):
-                # no |<< or >>| buttons if we only have two pages
-                # we can't forbid it if someone ends up using it but remove
-                # it from the default set
-                continue
+        self.message = await self.channel.send(content=content, embed=embed, view=self)
 
-            await self.message.add_reaction(reaction)
-
-    async def checked_show_page(self, page):
+    async def checked_show_page(self, page: int):
         if page != 0 and page <= self.maximum_pages:
             await self.show_page(page)
 
-    async def first_page(self):
+    async def first_page(self, inter: discord.Interaction):
         """goes to the first page"""
+        await inter.response.defer()
         await self.show_page(1)
 
-    async def last_page(self):
+    async def last_page(self, inter: discord.Interaction):
         """goes to the last page"""
+        await inter.response.defer()
         await self.show_page(self.maximum_pages)
 
-    async def next_page(self):
+    async def next_page(self, inter: discord.Interaction):
         """goes to the next page"""
+        await inter.response.defer()
         await self.checked_show_page(self.current_page + 1)
 
-    async def previous_page(self):
+    async def previous_page(self, inter: discord.Interaction):
         """goes to the previous page"""
+        await inter.response.defer()
         await self.checked_show_page(self.current_page - 1)
 
-    async def show_current_page(self):
+    async def show_current_page(self, inter: discord.Interaction):
+        await inter.response.defer()
         if self.paginating:
             await self.show_page(self.current_page)
 
-    async def numbered_page(self):
+    async def numbered_page(self, inter: discord.Interaction):
         """lets you type a page number to go to"""
-        to_delete = []
-        to_delete.append(await self.channel.send("What page do you want to go to?"))
+        await inter.response.defer()
+        to_delete = [await self.channel.send("What page do you want to go to?")]
 
         def message_check(m):
             return m.author == self.author and self.channel == m.channel and m.content.isdigit()
@@ -204,84 +205,39 @@ class Pages:
 
         try:
             await self.channel.delete_messages(to_delete)
-        except Exception:
+        except Exception: # noqa
             pass
-
-    async def show_help(self):
-        """shows this message"""
-        messages = ["Welcome to the interactive paginator!\n"]
-        messages.append(
-            "This interactively allows you to see pages of text by navigating with " "reactions. They are as follows:\n"
-        )
-
-        for (emoji, func) in self.reaction_emojis:
-            messages.append(f"{emoji} {func.__doc__}")
-
-        embed = self.embed.copy()
-        embed.clear_fields()
-        embed.description = "\n".join(messages)
-        embed.set_footer(text=f"We were on page {self.current_page} before this message.")
-        await self.message.edit(content=None, embed=embed)
-
-        async def go_back_to_current_page():
-            await asyncio.sleep(60.0)
-            await self.show_current_page()
-
-        self.bot.loop.create_task(go_back_to_current_page())
 
     async def stop_pages(self):
         """stops the interactive pagination session"""
-        await self.message.delete()
-        self.paginating = False
+        if self.delete_after:
+            await self.message.delete()
 
-    def react_check(self, reaction, user):
-        if user is None or user.id != self.author.id:
+        super().stop()
+
+    stop = stop_pages
+
+    def _check(self, interaction: discord.Interaction):
+        if interaction.user.id != self.author.id:
             return False
 
-        if reaction.message.id != self.message.id:
-            return False
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        resp = self._check(interaction)
 
-        for (emoji, func) in self.reaction_emojis:
-            if reaction.emoji == emoji:
-                self.match = func
-                return True
-        return False
+        if not resp:
+            await interaction.response.send_message("You cannot use this menu", ephemeral=True)
 
-    async def paginate(self):
-        """Actually paginate the entries and run the interactive loop if necessary."""
-        first_page = self.show_page(1, first=True)
-        if not self.paginating:
-            await first_page
-        else:
-            # allow us to react to reactions right away if we're paginating
-            self.bot.loop.create_task(first_page)
+        return resp
 
-        while self.paginating:
+    async def paginate(self, msg_kwargs: Dict[str, Any] = None):
+        await self.show_page(1, first=True, msg_kwargs=msg_kwargs)
+
+        await self.wait()
+        if self.delete_after:
             try:
-                reaction, user = await self.bot.wait_for("reaction_add", check=self.react_check, timeout=60.0)
-            except asyncio.TimeoutError:
-                self.paginating = False
-                if self.delete_after:
-                    try:
-                        await self.message.delete()
-                    except:
-                        pass
-                    finally:
-                        break
-                else:
-                    try:
-                        await self.message.clear_reactions()
-                    except:
-                        pass
-                    finally:
-                        break
-
-            try:
-                await self.message.remove_reaction(reaction, user)
-            except:
-                pass  # can't remove it so don't bother doing so
-
-            await self.match()
+                await self.message.delete()
+            except discord.HTTPException:
+                pass
 
 
 class FieldPages(Pages):
@@ -312,7 +268,7 @@ class FieldPages(Pages):
         )
         self.description = description
 
-    def prepare_embed(self, entries, page, *, first=False):
+    def prepare_embed(self, entries: List[Any], page: int, *, first=False):
         self.embed.clear_fields()
         self.embed.description = self.description or discord.Embed.Empty
         self.embed.title = self.title or discord.Embed.Empty
@@ -354,6 +310,8 @@ class TextPages(Pages):
 class EmbedPages(Pages):
     """Similar to Pages except entries should be a list of embeds."""
 
+    entries: List[discord.Embed]
+
     def __init__(
         self,
         ctx,
@@ -377,7 +335,7 @@ class EmbedPages(Pages):
         )
         self.description = description
 
-    def prepare_embed(self, entries, page, *, first=False):
+    def prepare_embed(self, entries: List[discord.Embed], page: int, *, first=False):
         self.embed = self.entries[page]
 
         if self.maximum_pages > 1:
