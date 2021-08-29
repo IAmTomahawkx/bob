@@ -1,6 +1,6 @@
 from __future__ import annotations
 import asyncio
-from typing import Optional, Union, Callable, TYPE_CHECKING
+from typing import Optional, Union, Callable, TYPE_CHECKING, Dict, Any
 
 import discord
 from discord.ext import commands
@@ -33,12 +33,13 @@ class Context(commands.Context):
         pages = paginator.Pages(self, entries=fields, **kwargs)
         await pages.paginate()
 
-    async def paginate_text(self, content, codeblock=False, codeblock_pre="", allow_stop=False):
+    async def paginate_text(self, content: str, codeblock=False, codeblock_pre="", allow_stop=False, msg_kwargs: Dict[str, Any]=None):
         if codeblock:
             pages = paginator.TextPages(self, content, prefix=f"```{codeblock_pre}", stop=allow_stop)
         else:
             pages = paginator.TextPages(self, content, prefix="", suffix="", stop=allow_stop)
-        await pages.paginate()
+
+        await pages.paginate(msg_kwargs)
 
     async def ask(
         self,
