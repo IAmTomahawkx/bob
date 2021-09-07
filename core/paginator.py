@@ -230,10 +230,13 @@ class Pages(ui.View):
         return resp
 
     async def paginate(self, msg_kwargs: Dict[str, Any] = None):
+        if self.maximum_pages > 1:
+            self.paginating = True
+
         await self.show_page(1, first=True, msg_kwargs=msg_kwargs)
 
         await self.wait()
-        if self.delete_after:
+        if self.delete_after and self.paginating:
             try:
                 await self.message.delete()
             except discord.HTTPException:

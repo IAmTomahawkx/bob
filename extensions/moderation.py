@@ -1,7 +1,7 @@
 from __future__ import annotations
 import asyncio
 import re
-from typing import TYPE_CHECKING, Optional, Tuple, List, Union, Literal
+from typing import TYPE_CHECKING, Optional, Tuple, Set, Union, Literal
 
 import asyncpg
 import discord
@@ -47,7 +47,7 @@ class _MassBanModeConverter(commands.Converter):
 
         return self.MODES[argument]
 
-class MassBanFlags(commands.FlagConverter, case_insenstive=True):
+class MassBanFlags(commands.FlagConverter, case_insensitive=True):
     reason: Optional[str]
 
     users: Tuple[discord.User, ...] = commands.flag(aliases=["user", "u", "member", "members", "m"], default=lambda _: [])
@@ -69,7 +69,7 @@ class MassBanFlags(commands.FlagConverter, case_insenstive=True):
 
     dry_run: Optional[bool] = commands.flag(name="dry-run", aliases=["dr", "show", "no-ban"])
     delete_message_days: Literal[0, 1, 2, 3, 4, 5, 6, 7] = commands.flag(name="delete-message-days", aliases=["d", "dmd"], default=lambda _: 1)
-    mode: _MassBanModeConverter = _MassBanModeConverter.MODES['any']
+    mode: _MassBanModeConverter = _MassBanModeConverter.MODES['all']
 
 
 def setup(bot: Bot):
@@ -332,10 +332,10 @@ class Moderation(commands.Cog):
     async def massban(self, ctx: Context, *, flags: MassBanFlags):
         print(flags, flags)
 
-        targets: List[Union[discord.Member, discord.User]] = []
+        targets: Set[Union[discord.Member, discord.User]] = set()
 
         if flags.users:
-            targets.extend(flags.users)
+            targets.update(flags.users)
 
         async def channelcheck():
             pass
@@ -375,8 +375,8 @@ class Moderation(commands.Cog):
             if checks:
                 async def channelcheck():
                     async for msg in flags.channel.history(limit=max(1, min(flags.search, 2000))):
-                        if strategy(msg):
-                            targets.append(msg.author)
+                        if strategy(x(msg) for x in checks):
+                            targets.add(msg.author)
 
         if flags.name or flags.recent_created or flags.recent_joined \
                 or flags.no_avatar is not None or flags.no_roles is not None:
@@ -407,8 +407,8 @@ class Moderation(commands.Cog):
 
                     for user in ctx.guild.members:
                         await asyncio.sleep(0) # large guilds could potentially freeze the bot
-                        if strategy(userchecks):
-                            targets.append(user)
+                        if strategy(x(user) for x in userchecks):
+                            targets.add(user)
 
         async with ctx.typing():
             await asyncio.wait((
@@ -419,34 +419,35 @@ class Moderation(commands.Cog):
             if not targets:
                 return await ctx.reply("No targets matched the given parameters", mention_author=False)
 
-            if flags.dry_run:
-                return await ctx.paginate_text(
-                    "\n".join(f"{x.mention} - {x} ({x.id})" for x in targets),
-                    msg_kwargs={"allowed_mentions": discord.AllowedMentions.none()}
-                )
+            if not flags.dry_run:
+                reason = flags.reason or "No reason provided"
+                audit_reason = reason + f" (action by {ctx.author}, {ctx.author.id})"
+                fails = []
 
-            reason = flags.reason or "No reason provided"
-            audit_reason = reason + f" (action by {ctx.author}, {ctx.author.id})"
-            fails = []
+                dispatch: Optional[Dispatch] = self.bot.get_cog("Dispatch")
+                if not dispatch:
+                    raise RuntimeError("Failed to acquire the dispatcher, cannot proceed. Please report this")
 
-            dispatch: Optional[Dispatch] = self.bot.get_cog("Dispatch")
-            if not dispatch:
-                raise RuntimeError("Failed to acquire the dispatcher, cannot proceed. Please report this")
+                for target in targets:
+                    try:
+                        await target.ban(reason=audit_reason, delete_message_days=flags.delete_message_days)
+                    except discord.HTTPException:
+                        fails.append(target)
+                        continue
 
-            for target in targets:
-                try:
-                    await target.ban(reason=audit_reason, delete_message_days=flags.delete_message_days)
-                except discord.HTTPException:
-                    fails.append(target)
-                    continue
+                    dispatch.recent_events[(ctx.guild.id, target.id, "ban")] = (
+                        target,
+                        ctx.author,
+                        reason,
+                        ctx.message.jump_url,
+                        None
+                    )
+                    return
 
-                dispatch.recent_events[(ctx.guild.id, target.id, "ban")] = (
-                    target,
-                    ctx.author,
-                    reason,
-                    ctx.message.jump_url,
-                    None
-                )
+        await ctx.paginate_text(
+            "\n".join(f"{x.mention} - {x} ({x.id})" for x in targets),
+            msg_kwargs={"allowed_mentions": discord.AllowedMentions.none()}
+        )
 
     @commands.command(
         name="mute",
@@ -485,7 +486,7 @@ class Moderation(commands.Cog):
         context = None
         dispatch: Optional[Dispatch] = self.bot.get_cog("Dispatch")
         if dispatch:
-            context = dispatch.ctx_cache.get(ctx.guild.id)
+            context = await dispatch.get_context(ctx.guild.id)
 
         if not context:
             context = ParsingContext(self.bot, ctx.guild)
@@ -551,6 +552,58 @@ class Moderation(commands.Cog):
                 await ctx.reply(f"Muted {len(users)} users", mention_author=False, delete_after=5)
             else:
                 await ctx.reply(f"Muted {users[0]}", mention_author=False, delete_after=5)
+
+    @commands.command(
+        name="unmute",
+        usage=[
+            helping.GreedyMember("Member(s)", False),
+            helping.RemainderText("Reason", True, "No reason given")
+        ],
+        extras={"checks": [helping.CheckBotHasPermission(manage_roles=True), helping.CheckModerator()]}
+    )
+    @commands.bot_has_permissions(manage_roles=True)
+    @commands.guild_only()
+    @commands.has_permissions(manage_roles=True)
+    async def unmute(self, ctx: Context, members: commands.Greedy[discord.Member], *, reason: str = None):
+        reason = reason or "No reason given"
+        audit_reason = reason + f" (action by {ctx.author} {ctx.author.id})"
+
+        context = None
+        dispatch: Optional[Dispatch] = self.bot.get_cog("Dispatch")
+        if dispatch:
+            context = await dispatch.get_context(ctx.guild.id)
+
+        if not context:
+            context = ParsingContext(self.bot, ctx.guild)
+            await context.fetch_required_data()
+
+        role = ctx.guild.get_role(context.mute_role)
+        if not role:
+            if ctx.author.guild_permissions.administrator:
+                return await ctx.reply(
+                    "There is no mute role set up. Please add a mute role to your server configuration"
+                )
+
+            return await ctx.reply("There is no mute role set up. Please tell a server admin to set one up")
+
+        fails = set()
+
+        for target in members:
+            if not target._roles.has(role.id):
+                pass
+
+            try:
+                await target.remove_roles(role, reason=audit_reason)
+            except discord.HTTPException:
+                fails.add(target)
+
+        succeeds = [x for x in members if x not in fails]
+        async with ctx.bot.db.acquire() as conn:
+            await conn.executemany(
+                "DELETE FROM mutes WHERE guild_id = $1 AND user_id = $2",
+                [(ctx.guild.id, x.id) for x in succeeds]
+            )
+
 
     @commands.command(
         name="purge",
