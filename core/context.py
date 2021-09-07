@@ -33,7 +33,9 @@ class Context(commands.Context):
         pages = paginator.Pages(self, entries=fields, **kwargs)
         await pages.paginate()
 
-    async def paginate_text(self, content: str, codeblock=False, codeblock_pre="", allow_stop=False, msg_kwargs: Dict[str, Any]=None):
+    async def paginate_text(
+        self, content: str, codeblock=False, codeblock_pre="", allow_stop=False, msg_kwargs: Dict[str, Any] = None
+    ):
         if codeblock:
             pages = paginator.TextPages(self, content, prefix=f"```{codeblock_pre}", stop=allow_stop)
         else:

@@ -35,6 +35,7 @@ from discord.ext import commands
 if TYPE_CHECKING:
     from core.context import Context
 
+
 class plural:
     def __init__(self, value):
         self.value = value
@@ -101,7 +102,7 @@ class ShortTime:
         if match is None or not match.group(0):
             raise commands.BadArgument("invalid time provided")
 
-        data = {k: int(v) for k, v in match.groupdict(default=0).items()} # noqa
+        data = {k: int(v) for k, v in match.groupdict(default=0).items()}  # noqa
         now = now or datetime.datetime.utcnow()
         self.dt = now + relativedelta(**data)
 
@@ -114,7 +115,7 @@ class Time(HumanTime):
     def __init__(self, argument, *, now=None):
         try:
             o = ShortTime(argument, now=now)
-        except Exception: # noqa
+        except Exception:  # noqa
             super().__init__(argument)
         else:
             self.dt = o.dt
@@ -155,7 +156,7 @@ class UserFriendlyTime(commands.Converter):
 
     __slots__ = ("converter", "default", "dt")
 
-    def __init__(self, converter = None, *, default: Any = None):
+    def __init__(self, converter=None, *, default: Any = None):
         if isinstance(converter, type) and issubclass(converter, commands.Converter):
             converter = converter()
 
@@ -236,10 +237,13 @@ class UserFriendlyTime(commands.Converter):
 
         return await self.check_constraints(ctx, now, remaining)
 
+
 T = TypeVar("T", bound=UserFriendlyTime)
+
 
 class OptionalUserFriendlyTime(UserFriendlyTime):
     pass
+
 
 class PastUserFriendlyTime(UserFriendlyTime):
     async def check_constraints(self, ctx: Context, now: datetime.datetime, remaining: Optional[str]) -> T:

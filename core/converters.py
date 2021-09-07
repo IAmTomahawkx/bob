@@ -36,13 +36,15 @@ class ConfigFileConverter(Converter):
         arg = codeblock_converter(argument)
         return arg.content
 
+
 class RegexConverter(Converter):
     regex: Optional[re.Re]
+
     async def convert(self, ctx: Context, argument: str) -> RegexConverter:
         try:
             self.regex = re.compile(argument)
         except re.CompileError as e:
-            bs = '\\`'
+            bs = "\\`"
             raise BadArgument(f"`{argument.replace('`', bs)}` is not a valid regex. {' '.join(e.args)}")
         else:
             return self

@@ -23,9 +23,7 @@ MSGDAYS_RE = re.compile("(?:--delete-message-days|--dmd|--del)\s+(\d)")
 
 
 class PurgeFlags(commands.FlagConverter, case_insensitive=True):
-    users: Tuple[discord.User] = commands.flag(
-        aliases=["user", "u", "member", "members", "m"], default=lambda _: []
-    )
+    users: Tuple[discord.User] = commands.flag(aliases=["user", "u", "member", "members", "m"], default=lambda _: [])
     contents: Optional[str] = commands.flag(aliases=["content", "c"])
     reason: Optional[str]
     embeds: Optional[bool] = commands.flag(aliases=["e"], default=lambda _: False)
@@ -33,11 +31,7 @@ class PurgeFlags(commands.FlagConverter, case_insensitive=True):
 
 
 class _MassBanModeConverter(commands.Converter):
-    MODES = {
-        "any": 0,
-        "all": 1,
-        "none": 2
-    }
+    MODES = {"any": 0, "all": 1, "none": 2}
     REVERSED = {v: k for k, v in MODES.items()}
 
     async def convert(self, ctx: Context, argument: str) -> converter.T_co:
@@ -47,11 +41,16 @@ class _MassBanModeConverter(commands.Converter):
 
         return self.MODES[argument]
 
+
 class MassBanFlags(commands.FlagConverter, case_insensitive=True):
     reason: Optional[str]
 
-    users: Tuple[discord.User, ...] = commands.flag(aliases=["user", "u", "member", "members", "m"], default=lambda _: [])
-    no_avatar: Optional[bool] = commands.flag(name="no-avatar", aliases=["noavy", "default-avatar", "defaultavy", "na", "da"])
+    users: Tuple[discord.User, ...] = commands.flag(
+        aliases=["user", "u", "member", "members", "m"], default=lambda _: []
+    )
+    no_avatar: Optional[bool] = commands.flag(
+        name="no-avatar", aliases=["noavy", "default-avatar", "defaultavy", "na", "da"]
+    )
     no_roles: Optional[bool] = commands.flag(name="no-roles", aliases=["norole", "nr"])
     recent_joined: Optional[time.PastUserFriendlyTime] = commands.flag(name="joined", aliases=["j", "rj"])
     recent_created: Optional[time.PastUserFriendlyTime] = commands.flag(name="created", aliases=["c", "rc"])
@@ -68,8 +67,10 @@ class MassBanFlags(commands.FlagConverter, case_insensitive=True):
     mention_count: Optional[int] = commands.flag(name="mention-count", aliases=["mc"])
 
     dry_run: Optional[bool] = commands.flag(name="dry-run", aliases=["dr", "show", "no-ban"])
-    delete_message_days: Literal[0, 1, 2, 3, 4, 5, 6, 7] = commands.flag(name="delete-message-days", aliases=["d", "dmd"], default=lambda _: 1)
-    mode: _MassBanModeConverter = _MassBanModeConverter.MODES['all']
+    delete_message_days: Literal[0, 1, 2, 3, 4, 5, 6, 7] = commands.flag(
+        name="delete-message-days", aliases=["d", "dmd"], default=lambda _: 1
+    )
+    mode: _MassBanModeConverter = _MassBanModeConverter.MODES["all"]
 
 
 def setup(bot: Bot):
@@ -343,19 +344,17 @@ class Moderation(commands.Cog):
             pass
 
         usercheck = channelcheck
-        if flags.mode == _MassBanModeConverter.MODES['any']:
+        if flags.mode == _MassBanModeConverter.MODES["any"]:
             strategy = any
-        elif flags.mode == _MassBanModeConverter.MODES['all']:
+        elif flags.mode == _MassBanModeConverter.MODES["all"]:
             strategy = all
-        elif flags.mode == _MassBanModeConverter.MODES['none']:
+        elif flags.mode == _MassBanModeConverter.MODES["none"]:
             strategy = lambda x: not any(x)
         else:
             raise RuntimeError(f"Unknown mode: {flags.mode}")
 
         if flags.channel:
-            checks = [
-                lambda m: ctx.guild.owner_id == ctx.author.id or ctx.author.top_role < m.author.top_role
-            ]
+            checks = [lambda m: ctx.guild.owner_id == ctx.author.id or ctx.author.top_role < m.author.top_role]
             if not flags.bots:
                 checks.append(lambda m: not m.author.bot)
 
@@ -375,13 +374,19 @@ class Moderation(commands.Cog):
                 checks.append(lambda m: len(m.mentions) >= flags.mention_count)
 
             if checks:
+
                 async def channelcheck():
                     async for msg in flags.channel.history(limit=max(1, min(flags.search, 2000))):
                         if strategy(x(msg) for x in checks):
                             targets.add(msg.author)
 
-        if flags.name or flags.recent_created or flags.recent_joined \
-                or flags.no_avatar is not None or flags.no_roles is not None:
+        if (
+            flags.name
+            or flags.recent_created
+            or flags.recent_joined
+            or flags.no_avatar is not None
+            or flags.no_roles is not None
+        ):
 
             userchecks = []
             if not flags.bots:
@@ -403,20 +408,18 @@ class Moderation(commands.Cog):
                 userchecks.append(lambda u: u.created_at < flags.recent_created.dt)
 
             if userchecks:
+
                 async def usercheck():
                     if not ctx.guild.chunked:
                         await ctx.guild.chunk()
 
                     for user in ctx.guild.members:
-                        await asyncio.sleep(0) # large guilds could potentially freeze the bot
+                        await asyncio.sleep(0)  # large guilds could potentially freeze the bot
                         if strategy(x(user) for x in userchecks):
                             targets.add(user)
 
         async with ctx.typing():
-            await asyncio.wait((
-                channelcheck(),
-                usercheck()
-            ), return_when=asyncio.ALL_COMPLETED)
+            await asyncio.wait((channelcheck(), usercheck()), return_when=asyncio.ALL_COMPLETED)
 
             if not targets:
                 return await ctx.reply("No targets matched the given parameters", mention_author=False)
@@ -442,13 +445,13 @@ class Moderation(commands.Cog):
                         ctx.author,
                         reason,
                         ctx.message.jump_url,
-                        None
+                        None,
                     )
                     return
 
         await ctx.paginate_text(
             "\n".join(f"{x.mention} - {x} ({x.id})" for x in targets),
-            msg_kwargs={"allowed_mentions": discord.AllowedMentions.none()}
+            msg_kwargs={"allowed_mentions": discord.AllowedMentions.none()},
         )
 
     @commands.command(
@@ -557,11 +560,8 @@ class Moderation(commands.Cog):
 
     @commands.command(
         name="unmute",
-        usage=[
-            helping.GreedyMember("Member(s)", False),
-            helping.RemainderText("Reason", True, "No reason given")
-        ],
-        extras={"checks": [helping.CheckBotHasPermission(manage_roles=True), helping.CheckModerator()]}
+        usage=[helping.GreedyMember("Member(s)", False), helping.RemainderText("Reason", True, "No reason given")],
+        extras={"checks": [helping.CheckBotHasPermission(manage_roles=True), helping.CheckModerator()]},
     )
     @commands.bot_has_permissions(manage_roles=True)
     @commands.guild_only()
@@ -602,10 +602,8 @@ class Moderation(commands.Cog):
         succeeds = [x for x in members if x not in fails]
         async with ctx.bot.db.acquire() as conn:
             await conn.executemany(
-                "DELETE FROM mutes WHERE guild_id = $1 AND user_id = $2",
-                [(ctx.guild.id, x.id) for x in succeeds]
+                "DELETE FROM mutes WHERE guild_id = $1 AND user_id = $2", [(ctx.guild.id, x.id) for x in succeeds]
             )
-
 
     @commands.command(
         name="purge",
