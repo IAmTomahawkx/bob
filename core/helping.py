@@ -305,7 +305,9 @@ class MemberFlag(FlagHelper):
 
     short = long
 
+
 # custom converters
+
 
 class ConfigFile(BaseHelper):
     description = "A config file. This can be a code block, a hasteb.in or mystb.in link, or a file upload."
@@ -325,7 +327,9 @@ class ConfigFile(BaseHelper):
 
         return f"<{self.name}: ConfigFile>"
 
+
 # checks
+
 
 class Check:
     fast: str
@@ -351,6 +355,7 @@ class CheckAdmin(Check):
     def predicate(self, ctx: Context) -> bool:
         return ctx.guild and ctx.author.guild_permissions.administrator
 
+
 class CheckModerator(Check):
     priority = 30
     fast = "Locked to Moderators"
@@ -358,6 +363,7 @@ class CheckModerator(Check):
 
     def predicate(self, ctx: Context) -> bool:
         return ctx.guild and ctx.channel.permissions_for(ctx.author).manage_messages
+
 
 class CheckRoleManage(Check):
     priority = 33
@@ -367,6 +373,7 @@ class CheckRoleManage(Check):
     def predicate(self, ctx: Context) -> bool:
         return ctx.guild and ctx.author.guild_permissions.manage_roles
 
+
 class CheckKickModerator(Check):
     priority = 34
     fast = "Locked to Moderators"
@@ -375,6 +382,7 @@ class CheckKickModerator(Check):
     def predicate(self, ctx: Context) -> bool:
         return ctx.guild and ctx.author.guild_permissions.kick_members
 
+
 class CheckBanModerator(Check):
     priority = 35
     fast = "Locked to Moderators"
@@ -382,6 +390,7 @@ class CheckBanModerator(Check):
 
     def predicate(self, ctx: Context) -> bool:
         return ctx.guild and ctx.author.guild_permissions.ban_members
+
 
 class CheckBotHasPermission(Check):
     priority = 55
@@ -402,6 +411,8 @@ class CheckBotHasPermission(Check):
         me = guild.me if guild is not None else ctx.bot.user
         permissions = ctx.channel.permissions_for(me)  # type: ignore
 
-        missing = tuple(perm for perm, value in self.flags.items() if getattr(permissions, perm) != value) # pulled from dpy
+        missing = tuple(
+            perm for perm, value in self.flags.items() if getattr(permissions, perm) != value
+        )  # pulled from dpy
 
         return not bool(missing)

@@ -13,8 +13,10 @@ if TYPE_CHECKING:
     from core.context import Context
     from core.parse import ParsingContext
 
+
 def setup(bot: Bot):
     bot.help_command = HelpCommand()
+
 
 class HelpMenu(ui.View):
     MAX_COMMANDS_PER_PAGE = 5
@@ -26,12 +28,14 @@ class HelpMenu(ui.View):
         self.message: Optional[discord.Message] = None
         self.context = context
 
-        self.return_to: Optional[Union[Ellipsis, commands.Cog, commands.Command]] = None # Ellipsis is the lazy bot help
+        self.return_to: Optional[
+            Union[Ellipsis, commands.Cog, commands.Command]
+        ] = None  # Ellipsis is the lazy bot help
         self.current: Union[Ellipsis, commands.Cog, commands.Command] = ...
         self.page = 0
 
     def get_command_signature(self, command: commands.Command, short: bool) -> str:
-        usage: List[helping.BaseHelper] = command.usage # noqa
+        usage: List[helping.BaseHelper] = command.usage  # noqa
         if not usage:
             return command.signature
 
@@ -42,7 +46,6 @@ class HelpMenu(ui.View):
 
         return resp
 
-
     async def get_bot_help(self) -> discord.Embed:
         self.return_to = self.current
         self.current = ...
@@ -51,7 +54,7 @@ class HelpMenu(ui.View):
         e = discord.Embed(title="Help", timestamp=discord.utils.utcnow())
 
         for cog in sections.values():
-            if not hasattr(cog, "hidden") or cog.hidden: # noqa
+            if not hasattr(cog, "hidden") or cog.hidden:  # noqa
                 continue
 
             e.add_field(name=cog.qualified_name, value=cog.description or "No description provided", inline=False)
@@ -85,14 +88,17 @@ class HelpMenu(ui.View):
             btn.callback = self.handle_page_next
             self.add_item(btn)
 
-        for command in cmds[0:self.MAX_COMMANDS_PER_PAGE]:
-            e.add_field(name=command.qualified_name, value=f"`{self.get_command_signature(command, False)}`\n{command.short_doc}", inline=False)
+        for command in cmds[0 : self.MAX_COMMANDS_PER_PAGE]:
+            e.add_field(
+                name=command.qualified_name,
+                value=f"`{self.get_command_signature(command, False)}`\n{command.short_doc}",
+                inline=False,
+            )
             btn = ui.Button(style=discord.ButtonStyle.grey, label=command.qualified_name, custom_id=command.name, row=2)
             btn.callback = self.handle_command_press
             self.add_item(btn)
 
         return e
-
 
     async def get_command_help(self, command: Union[commands.Command, commands.Group]):
         self.return_to = self.current
@@ -103,7 +109,7 @@ class HelpMenu(ui.View):
         btn.callback = self.handle_back_button
         self.add_item(btn)
 
-        usage: List[helping.BaseHelper] = command.usage or [] # noqa
+        usage: List[helping.BaseHelper] = command.usage or []  # noqa
 
         desc = f"```toml\n{self.context.clean_prefix}{command.qualified_name} {self.get_command_signature(command, False)}\n```\n"
         n = "\n"
@@ -130,7 +136,6 @@ class HelpMenu(ui.View):
 
         self.message = await self.context.reply(embed=embed, view=self, mention_author=False)
 
-
     ## button handlers
 
     async def handle_back_button(self, _):
@@ -148,12 +153,12 @@ class HelpMenu(ui.View):
 
     async def handle_command_press(self, interaction: discord.Interaction):
         print(interaction.data)
-        embed = await self.get_command_help(self.context.bot.get_command(interaction.data['custom_id']))
+        embed = await self.get_command_help(self.context.bot.get_command(interaction.data["custom_id"]))
         await self.message.edit(embed=embed, view=self)
 
     async def handle_cog_press(self, interaction: discord.Interaction):
         print(interaction.data)
-        embed = await self.get_cog_help(self.context.bot.get_cog(interaction.data['custom_id']))
+        embed = await self.get_cog_help(self.context.bot.get_cog(interaction.data["custom_id"]))
         await self.message.edit(embed=embed, view=self)
 
     async def handle_page_next(self, interaction: discord.Interaction):
@@ -161,6 +166,7 @@ class HelpMenu(ui.View):
 
     async def handle_page_back(self, interaction: discord.Interaction):
         pass
+
 
 class HelpCommand(commands.HelpCommand):
     async def send_bot_help(self, mapping: Mapping):
@@ -173,7 +179,7 @@ class HelpCommand(commands.HelpCommand):
 
     async def command_not_found(self, string):
         string = string.lower()
-        dispatch = self.context.bot.get_cog("Dispatch") # type: Any
+        dispatch = self.context.bot.get_cog("Dispatch")  # type: Any
         if dispatch:
             ctx: ParsingContext = await dispatch.get_context(self.context.guild.id)
             if string in ctx.commands:

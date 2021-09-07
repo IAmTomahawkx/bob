@@ -19,6 +19,7 @@ def setup(bot):
 
 class SelfRoles(commands.Cog, name="Self Roles"):
     hidden = True
+
     def __init__(self, bot: Bot):
         self.bot = bot
 
