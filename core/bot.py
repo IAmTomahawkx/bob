@@ -78,7 +78,7 @@ class Bot(commands.Bot):
         self.db: asyncpg.pool.Pool = None  # noqa
 
         intents = discord.Intents.all()
-        intents.presences = False # noqa
+        intents.presences = False  # noqa
         allowed_mentions = discord.AllowedMentions.none()
         super().__init__(get_pre, intents=intents, allowed_mentions=allowed_mentions, **settings)
 
