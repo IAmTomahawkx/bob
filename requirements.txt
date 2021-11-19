@@ -1,4 +1,4 @@
-git+https://github.com/Rapptz/discord.py
+git+https://github.com/IAmTomahawkx/enhanced-discord.py.git@downstream-2.0
 aiohttp
 parsedatetime
 python-dateutil

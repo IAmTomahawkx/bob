@@ -77,8 +77,8 @@ class Bot(commands.Bot):
         self.error_channel = self.settings["error_channel"]
         self.db: asyncpg.pool.Pool = None  # noqa
 
-        intents = discord.Intents.default()
-        intents.members = True  # noqa
+        intents = discord.Intents.all()
+        intents.presences = False # noqa
         allowed_mentions = discord.AllowedMentions.none()
         super().__init__(get_pre, intents=intents, allowed_mentions=allowed_mentions, **settings)
 
@@ -99,6 +99,10 @@ class Bot(commands.Bot):
         with open("config.json") as f:
             self.settings = json.load(f)
 
+    async def setup(self):
+        print(self._application_command_store.pre_registration)
+        await self.upload_guild_application_commands()
+
     async def start(self) -> None:  # noqa
         self.session = aiohttp.ClientSession()
         self.db: asyncpg.pool.Pool = await asyncpg.create_pool(self.settings["db_uri"], min_size=1)
@@ -115,7 +119,12 @@ class Bot(commands.Bot):
             self.load_extension(f"extensions.{ext[:-3]}")
 
         await self.login(self._token)
+        await self.setup()
         await self.connect(reconnect=True)
+
+    async def on_interaction(self, interaction):
+        print(interaction, interaction.data)
+        await super().on_interaction(interaction)
 
     async def on_ready(self):
         print(self.user)

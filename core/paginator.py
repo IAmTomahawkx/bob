@@ -1,5 +1,5 @@
 import asyncio
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, Callable, Awaitable
 
 import discord
 from discord import ui # shortcut because I'm lazy
@@ -348,3 +348,152 @@ class EmbedPages(Pages):
                 text = f"Page {page}/{self.maximum_pages}"
 
             self.embed.set_footer(text=text)
+
+def split_text(page: str, max_len: int) -> List[str]:
+    resp = []
+    while len(page) > max_len:
+        t = page[:max_len]
+        resp.append(t)
+        page = page[max_len:]
+
+    resp.append(page)
+
+    return resp
+
+class EmbeddedMultiPaginator(ui.View):
+    def __init__(
+            self,
+            sender: Callable[..., Awaitable[discord.Message]],
+            pages: List[str],
+            *,
+            title: str = discord.Embed.Empty,
+            per_page=1500,
+            show_page_count=False,
+            delete_after=False,
+            codeblocks: Optional[str] = None
+    ):
+        super().__init__()
+        self.sender = sender
+        self.title = title
+        self.pages: List[List[str]] = [split_text(p, per_page) for p in pages]
+        self.page_count = len(pages)
+        self.per_page = per_page
+        self.show_page_count = show_page_count
+        self.delete_after = delete_after
+        self.codeblocks = codeblocks
+
+        self.paginating = False
+        self.embed = discord.Embed()
+        self.current_page = 0
+        self.subpage = 0
+        self.message: Optional[discord.Message] = None
+
+
+    def get_page(self, page: int, subpage: int):
+        base = (page - 1) * self.per_page
+        return self.pages[base : base + self.per_page][subpage]
+
+    def get_embed(self, page: int, subpage: int):
+        self.prepare_embed(page, subpage)
+        return self.embed
+
+    def prepare_embed(self, page: int, subpage: int):
+        if self.page_count > 1:
+            if self.show_page_count:
+                text = f"Subpage {subpage+1}/{len(self.pages[page])} (Page {self.current_page+1}/{self.page_count})"
+            else:
+                text = f"Subpage {subpage+1}/{len(self.pages[page])}"
+
+            self.embed.set_footer(text=text)
+
+        if self.codeblocks:
+            self.embed.description = f"{self.codeblocks}\n{self.pages[page][subpage]}\n```"
+        else:
+            self.embed.description = self.pages[page][subpage]
+
+        self.embed.title = self.title
+
+
+    async def show_page(self, page: int, subpage: int, *, first=False, msg_kwargs: Dict[str, Any] = None):
+        self.current_page = page
+        embed = self.get_embed(page, subpage)
+
+        if not self.paginating:
+            return await self.sender(embed=embed, **msg_kwargs or {})
+
+        if not first:
+            return await self.message.edit(embed=embed, view=self)
+
+        self.message = await self.sender(embed=embed, view=self)
+
+    async def paginate(self, msg_kwargs: Dict[str, Any] = None):
+        self.paginating = True
+
+        await self.show_page(0, 0, first=True, msg_kwargs=msg_kwargs)
+        await self.wait()
+
+        if self.delete_after and self.paginating:
+            try:
+                await self.message.delete()
+            except discord.HTTPException:
+                pass
+
+    @ui.button(emoji="\N{BLACK LEFT-POINTING DOUBLE TRIANGLE WITH VERTICAL BAR}", style=discord.ButtonStyle.secondary)
+    async def first_subpage(self, _, interaction: discord.Interaction):
+        await interaction.response.defer()
+        self.subpage = 0
+
+        await self.show_page(self.current_page, self.subpage)
+
+    @ui.button(emoji="\N{BLACK LEFT-POINTING TRIANGLE}", style=discord.ButtonStyle.secondary)
+    async def previous_subpage(self, _, interaction: discord.Interaction):
+        await interaction.response.defer()
+        self.subpage = max(0, self.subpage-1)
+
+        await self.show_page(self.current_page, self.subpage)
+
+    @ui.button(emoji="\N{BLACK RIGHT-POINTING TRIANGLE}", style=discord.ButtonStyle.secondary)
+    async def next_subpage(self, _, interaction: discord.Interaction):
+        await interaction.response.defer()
+        self.subpage = min(len(self.pages[self.current_page]), self.subpage+1)
+
+        await self.show_page(self.current_page, self.subpage)
+
+    @ui.button(emoji="\N{BLACK RIGHT-POINTING DOUBLE TRIANGLE WITH VERTICAL BAR}", style=discord.ButtonStyle.secondary)
+    async def last_subpage(self, _, interaction: discord.Interaction):
+        await interaction.response.defer()
+        self.subpage = len(self.pages[self.current_page]) - 1
+
+        await self.show_page(self.current_page, self.subpage)
+
+    @ui.button(emoji="\N{BLACK LEFT-POINTING DOUBLE TRIANGLE WITH VERTICAL BAR}", style=discord.ButtonStyle.primary, row=1)
+    async def first_page(self, _, interaction: discord.Interaction):
+        await interaction.response.defer()
+        self.current_page = 0
+        self.subpage = 0
+
+        await self.show_page(self.current_page, self.subpage)
+
+    @ui.button(emoji="\N{BLACK LEFT-POINTING TRIANGLE}", style=discord.ButtonStyle.primary, row=1)
+    async def previous_page(self, _, interaction: discord.Interaction):
+        await interaction.response.defer()
+        self.subpage = 0
+        self.current_page = max(0, self.current_page - 1)
+
+        await self.show_page(self.current_page, self.subpage)
+
+    @ui.button(emoji="\N{BLACK RIGHT-POINTING TRIANGLE}", style=discord.ButtonStyle.primary, row=1)
+    async def next_page(self, _, interaction: discord.Interaction):
+        await interaction.response.defer()
+        self.subpage = 0
+        self.current_page = min(self.page_count - 1, self.current_page + 1)
+
+        await self.show_page(self.current_page, self.subpage)
+
+    @ui.button(emoji="\N{BLACK RIGHT-POINTING DOUBLE TRIANGLE WITH VERTICAL BAR}", style=discord.ButtonStyle.primary, row=1)
+    async def last_page(self, _, interaction: discord.Interaction):
+        await interaction.response.defer()
+        self.subpage = 0
+        self.current_page = self.page_count - 1
+
+        await self.show_page(self.current_page, self.subpage)

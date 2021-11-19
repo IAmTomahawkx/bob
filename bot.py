@@ -1,4 +1,3 @@
-import asyncio
 from core.bot import Bot
 
 try:
