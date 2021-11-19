@@ -2,12 +2,13 @@ import asyncio
 from typing import Dict, Any, Optional, List, Callable, Awaitable
 
 import discord
-from discord import ui # shortcut because I'm lazy
+from discord import ui  # shortcut because I'm lazy
 from discord.ext.commands import Paginator as CommandPaginator, CommandError
 
 
 class CannotPaginate(CommandError):
     pass
+
 
 class Pages(ui.View):
     """Implements a paginator that queries the user for the
@@ -205,7 +206,7 @@ class Pages(ui.View):
 
         try:
             await self.channel.delete_messages(to_delete)
-        except Exception: # noqa
+        except Exception:  # noqa
             pass
 
     async def stop_pages(self):
