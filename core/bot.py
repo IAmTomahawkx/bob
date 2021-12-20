@@ -90,7 +90,6 @@ class Bot(commands.Bot):
         self.version = None
 
         self.guild_prefixes = {}
-        self.highlight_cache = {}
         self.bans = {}
 
         self.add_check(self.ban_check)
@@ -99,9 +98,8 @@ class Bot(commands.Bot):
         with open("config.json") as f:
             self.settings = json.load(f)
 
-    async def setup(self):
-        print(self._application_command_store.pre_registration)
-        await self.upload_guild_application_commands()
+    #async def setup(self):
+    #    await self.upload_guild_application_commands()
 
     async def start(self) -> None:  # noqa
         self.session = aiohttp.ClientSession()
@@ -123,7 +121,6 @@ class Bot(commands.Bot):
         await self.connect(reconnect=True)
 
     async def on_interaction(self, interaction):
-        print(interaction, interaction.data)
         await super().on_interaction(interaction)
 
     async def on_ready(self):
@@ -143,7 +140,7 @@ class Bot(commands.Bot):
         ctx = await self.get_context(message, cls=Context)
         if not ctx.valid:
             cog = self.get_cog("Bull")
-            await cog.run_ping(ctx)
+            await cog.run_ping(ctx) # type: ignore
         else:
             await self.invoke(ctx)
 
