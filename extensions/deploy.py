@@ -300,9 +300,9 @@ class Config(commands.Cog):
     @commands.has_guild_permissions(administrator=True)
     async def clear_config(self, ctx: context.Context):
         """
-        Deploys
-        :param ctx:
-        :return:
+        Clears your server configuration.
+        This is not reversable.
+        *you will need to upload a new config before you are able to use the bot.*
         """
         conf = Confirmation([ctx.author.id])
         rsp: discord.Message = await ctx.reply(
