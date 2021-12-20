@@ -350,6 +350,7 @@ class EmbedPages(Pages):
 
             self.embed.set_footer(text=text)
 
+
 def split_text(page: str, max_len: int) -> List[str]:
     resp = []
     while len(page) > max_len:
@@ -361,17 +362,18 @@ def split_text(page: str, max_len: int) -> List[str]:
 
     return resp
 
+
 class EmbeddedMultiPaginator(ui.View):
     def __init__(
-            self,
-            sender: Callable[..., Awaitable[discord.Message]],
-            pages: List[str],
-            *,
-            title: str = discord.Embed.Empty,
-            per_page=1500,
-            show_page_count=False,
-            delete_after=False,
-            codeblocks: Optional[str] = None
+        self,
+        sender: Callable[..., Awaitable[discord.Message]],
+        pages: List[str],
+        *,
+        title: str = discord.Embed.Empty,
+        per_page=1500,
+        show_page_count=False,
+        delete_after=False,
+        codeblocks: Optional[str] = None,
     ):
         super().__init__()
         self.sender = sender
@@ -388,7 +390,6 @@ class EmbeddedMultiPaginator(ui.View):
         self.current_page = 0
         self.subpage = 0
         self.message: Optional[discord.Message] = None
-
 
     def get_page(self, page: int, subpage: int):
         base = (page - 1) * self.per_page
@@ -413,7 +414,6 @@ class EmbeddedMultiPaginator(ui.View):
             self.embed.description = self.pages[page][subpage]
 
         self.embed.title = self.title
-
 
     async def show_page(self, page: int, subpage: int, *, first=False, msg_kwargs: Dict[str, Any] = None):
         self.current_page = page
@@ -449,14 +449,14 @@ class EmbeddedMultiPaginator(ui.View):
     @ui.button(emoji="\N{BLACK LEFT-POINTING TRIANGLE}", style=discord.ButtonStyle.secondary)
     async def previous_subpage(self, _, interaction: discord.Interaction):
         await interaction.response.defer()
-        self.subpage = max(0, self.subpage-1)
+        self.subpage = max(0, self.subpage - 1)
 
         await self.show_page(self.current_page, self.subpage)
 
     @ui.button(emoji="\N{BLACK RIGHT-POINTING TRIANGLE}", style=discord.ButtonStyle.secondary)
     async def next_subpage(self, _, interaction: discord.Interaction):
         await interaction.response.defer()
-        self.subpage = min(len(self.pages[self.current_page]), self.subpage+1)
+        self.subpage = min(len(self.pages[self.current_page]), self.subpage + 1)
 
         await self.show_page(self.current_page, self.subpage)
 
@@ -467,7 +467,9 @@ class EmbeddedMultiPaginator(ui.View):
 
         await self.show_page(self.current_page, self.subpage)
 
-    @ui.button(emoji="\N{BLACK LEFT-POINTING DOUBLE TRIANGLE WITH VERTICAL BAR}", style=discord.ButtonStyle.primary, row=1)
+    @ui.button(
+        emoji="\N{BLACK LEFT-POINTING DOUBLE TRIANGLE WITH VERTICAL BAR}", style=discord.ButtonStyle.primary, row=1
+    )
     async def first_page(self, _, interaction: discord.Interaction):
         await interaction.response.defer()
         self.current_page = 0
@@ -491,7 +493,9 @@ class EmbeddedMultiPaginator(ui.View):
 
         await self.show_page(self.current_page, self.subpage)
 
-    @ui.button(emoji="\N{BLACK RIGHT-POINTING DOUBLE TRIANGLE WITH VERTICAL BAR}", style=discord.ButtonStyle.primary, row=1)
+    @ui.button(
+        emoji="\N{BLACK RIGHT-POINTING DOUBLE TRIANGLE WITH VERTICAL BAR}", style=discord.ButtonStyle.primary, row=1
+    )
     async def last_page(self, _, interaction: discord.Interaction):
         await interaction.response.defer()
         self.subpage = 0
