@@ -20,7 +20,10 @@ def create_selfrole_view(guild: discord.Guild, models: List[SelfRole]) -> Tuple[
                     text = emoji = None
                     if m["emoji"]:
                         emoji = discord.utils.get(guild.emojis, id=m["emoji"])
-                        emoji = discord.PartialEmoji(name=emoji.name, animated=emoji.animated, id=emoji.id)
+                        if emoji:
+                            emoji = discord.PartialEmoji(name=emoji.name, animated=emoji.animated, id=emoji.id)
+                        else:
+                            emoji = m["emoji"]
                     else:
                         text = guild.get_role(role)
 
