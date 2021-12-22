@@ -61,11 +61,7 @@ class HelpMenu(ui.View):
         self.current = ...
         sections = self.context.bot.cogs
         self.clear_items()
-        e = discord.Embed(
-            title="Help",
-            description="",
-            timestamp=discord.utils.utcnow()
-        )
+        e = discord.Embed(title="Help", description="", timestamp=discord.utils.utcnow())
 
         for cog in sections.values():
             if not hasattr(cog, "hidden") or cog.hidden:  # noqa
@@ -74,8 +70,11 @@ class HelpMenu(ui.View):
             if not await self.can_run_any_commands(cog):
                 continue
 
-            e.add_field(name=cog.qualified_name, value=(cog.description and cog.description.split("\n")[0])
-                                                       or "No description provided", inline=False)
+            e.add_field(
+                name=cog.qualified_name,
+                value=(cog.description and cog.description.split("\n")[0]) or "No description provided",
+                inline=False,
+            )
             btn = ui.Button(style=discord.ButtonStyle.grey, label=cog.qualified_name, custom_id=cog.qualified_name)
             btn.callback = self.handle_cog_press
             self.add_item(btn)

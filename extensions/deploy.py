@@ -89,6 +89,7 @@ class Config(commands.Cog):
 
     You can view documentation for the bot at [idevision.net](https://idevision.net/static/bobdocs/html/index.html)
     """
+
     hidden = False
 
     def __init__(self, bot: Bot):

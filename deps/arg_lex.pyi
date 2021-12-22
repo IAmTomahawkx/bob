@@ -6,5 +6,4 @@ class Token:
     start: int
     end: int
 
-def run_lex(input: str) -> List[Token]:
-    ...
+def run_lex(input: str) -> List[Token]: ...
