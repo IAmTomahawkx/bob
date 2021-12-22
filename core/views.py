@@ -13,7 +13,7 @@ def create_selfrole_view(guild: discord.Guild, models: List[SelfRole]) -> Tuple[
 
     class View(discord.ui.View):
         def __init__(self):
-            super().__init__(None)
+            super().__init__()
 
             for m in models:
                 for role in m["roles"]:
