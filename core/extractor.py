@@ -351,8 +351,6 @@ async def parse_guild_groups(ctx: Context, cfg: Union[_t, List[_t]]) -> Dict[str
 
     resp = {}
 
-    print(cfg)
-
     for i, grp in enumerate(cfg):
         name = None
         try:
