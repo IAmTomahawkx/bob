@@ -66,7 +66,7 @@ class HelpMenu(ui.View):
         return e
 
     async def get_cog_help(self, cog: commands.Cog):
-        self.return_to = self.current
+        self.return_to = ...
         self.current = cog
 
         e = discord.Embed(title=cog.qualified_name, timestamp=discord.utils.utcnow())
