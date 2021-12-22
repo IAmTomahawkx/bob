@@ -57,7 +57,8 @@ class HelpMenu(ui.View):
             if not hasattr(cog, "hidden") or cog.hidden:  # noqa
                 continue
 
-            e.add_field(name=cog.qualified_name, value=cog.description or "No description provided", inline=False)
+            e.add_field(name=cog.qualified_name, value=(cog.description and cog.description.split("\n")[0])
+                                                       or "No description provided", inline=False)
             btn = ui.Button(style=discord.ButtonStyle.grey, label=cog.qualified_name, custom_id=cog.qualified_name)
             btn.callback = self.handle_cog_press
             self.add_item(btn)
