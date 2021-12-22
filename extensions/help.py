@@ -46,15 +46,32 @@ class HelpMenu(ui.View):
 
         return resp
 
+    async def can_run_any_commands(self, cog: commands.Cog) -> bool:
+        for command in cog.get_commands():
+            try:
+                if await command.can_run(self.context):
+                    return True
+            except:
+                pass
+
+        return False
+
     async def get_bot_help(self) -> discord.Embed:
         self.return_to = self.current
         self.current = ...
         sections = self.context.bot.cogs
         self.clear_items()
-        e = discord.Embed(title="Help", timestamp=discord.utils.utcnow())
+        e = discord.Embed(
+            title="Help",
+            description="",
+            timestamp=discord.utils.utcnow()
+        )
 
         for cog in sections.values():
             if not hasattr(cog, "hidden") or cog.hidden:  # noqa
+                continue
+
+            if not await self.can_run_any_commands(cog):
                 continue
 
             e.add_field(name=cog.qualified_name, value=(cog.description and cog.description.split("\n")[0])
