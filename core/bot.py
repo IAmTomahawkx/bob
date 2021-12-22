@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import traceback
 
 import asyncpg
 import calendar
@@ -131,7 +132,8 @@ class Bot(commands.Bot):
             return await context.send(exception.args[0])
 
         else:
-            await super().on_command_error(context, exception)
+            print(f"Ignoring exception in command {context.command}:", file=sys.stderr)
+            traceback.print_exception(type(exception), exception, exception.__traceback__, file=sys.stderr)
 
     async def on_message(self, message: discord.Message):
         if message.author.bot:
