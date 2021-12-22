@@ -77,7 +77,3 @@ class Context(commands.Context):
     @staticmethod
     def embed_invis(**kwargs):
         return discord.Embed(color=0x2F3136, **kwargs)
-
-    @property
-    def player(self):
-        return self.bot.wavelink.get_player(self.guild.id, cls=players.Player)
