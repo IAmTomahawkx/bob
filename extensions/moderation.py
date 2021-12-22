@@ -78,6 +78,9 @@ def setup(bot: Bot):
 
 
 class Moderation(commands.Cog):
+    """
+    Built in moderation commands to aid in moderating your community.
+    """
     hidden = False
 
     def __init__(self, bot: Bot):

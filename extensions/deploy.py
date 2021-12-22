@@ -84,6 +84,11 @@ def get_action_args(act: Actions) -> tuple:
 
 
 class Config(commands.Cog):
+    """
+    Commands that handle the configuration of the bot for your server. Includes deploying configuration files.
+
+    You can view documentation for the bot at [idevision.net](https://idevision.net/static/bobdocs/html/index.html)
+    """
     hidden = False
 
     def __init__(self, bot: Bot):
