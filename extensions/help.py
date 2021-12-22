@@ -140,7 +140,6 @@ class HelpMenu(ui.View):
     ## button handlers
 
     async def handle_back_button(self, _):
-        print(self.return_to)
         if self.return_to is ...:
             embed = await self.get_bot_help()
 
