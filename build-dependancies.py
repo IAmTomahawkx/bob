@@ -11,6 +11,8 @@ args = ["cargo", "build"]
 if release:
     args.append("--release")
 
+args = ["/bin/bash", "-c", " ".join(args)]
+
 for dep, lib in deps.items():
     print(f"============================\nStarting build of {dep}\n============================")
     p = pathlib.Path("deps", dep)
