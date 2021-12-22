@@ -32,48 +32,49 @@ class Dispatch(commands.Cog):
         if self.filled.is_set():
             return
 
-        data = await self.bot.db.fetch(
-            """
-            SELECT
-                name, actions, c.guild_id, cfg_id, c.store_messages, c.error_channel
-            FROM events
-            INNER JOIN configs c on c.id = events.cfg_id
-            """
-        )
-        self.cached_triggers["configs"] = {
-            x["guild_id"]: {
-                "id": x["cfg_id"],
-                "store_messages": x["store_messages"],
-                "error_channel": x["error_channel"],
+        async with self.bot.db.acquire() as conn:
+            data = await conn.fetch(
+                """
+                SELECT
+                    name, actions, c.guild_id, cfg_id, c.store_messages, c.error_channel
+                FROM events
+                INNER JOIN configs c on c.id = events.cfg_id
+                """
+            )
+            self.cached_triggers["configs"] = {
+                x["guild_id"]: {
+                    "id": x["cfg_id"],
+                    "store_messages": x["store_messages"],
+                    "error_channel": x["error_channel"],
+                }
+                for x in data
             }
-            for x in data
-        }
-        self.cached_triggers["configs"].update(
-            {x.id: {} for x in self.bot.guilds if x.id not in self.cached_triggers["configs"]}
-        )
+            self.cached_triggers["configs"].update(
+                {x.id: {} for x in self.bot.guilds if x.id not in self.cached_triggers["configs"]}
+            )
 
-        guilds = itertools.groupby(data, lambda k: k["guild_id"])
-        self.cached_triggers["events"] = {
-            x[0]: {c["name"]: {"name": c["name"], "actions": c["actions"]} for c in x[1]} for x in guilds
-        }
-        self.cached_triggers["events"].update(
-            {x.id: {} for x in self.bot.guilds if x.id not in self.cached_triggers["events"]}
-        )
+            guilds = itertools.groupby(data, lambda k: k["guild_id"])
+            self.cached_triggers["events"] = {
+                x[0]: {c["name"]: {"name": c["name"], "actions": c["actions"]} for c in x[1]} for x in guilds
+            }
+            self.cached_triggers["events"].update(
+                {x.id: {} for x in self.bot.guilds if x.id not in self.cached_triggers["events"]}
+            )
 
-        data = await self.bot.db.fetch(
-            """
-            SELECT
-                event, actions, ai.roles as ignore_roles, ai.channels as ignore_channels, c.guild_id
-            FROM automod
-            INNER JOIN automod_ignore ai on automod.id = ai.event_id
-            INNER JOIN configs c on automod.cfg_id = c.id
-            """
-        )
-        guilds = itertools.groupby(data, lambda k: k["guild_id"])
-        self.cached_triggers["automod"] = {c[0]: {x["event"]: dict(x) for x in c[1]} for c in guilds}
-        self.cached_triggers["automod"].update(
-            {x.id: {} for x in self.bot.guilds if x.id not in self.cached_triggers["automod"]}
-        )
+            data = await conn.fetch(
+                """
+                SELECT
+                    event, actions, ai.roles as ignore_roles, ai.channels as ignore_channels, c.guild_id
+                FROM automod
+                INNER JOIN automod_ignore ai on automod.id = ai.event_id
+                INNER JOIN configs c on automod.cfg_id = c.id
+                """
+            )
+            guilds = itertools.groupby(data, lambda k: k["guild_id"])
+            self.cached_triggers["automod"] = {c[0]: {x["event"]: dict(x) for x in c[1]} for c in guilds}
+            self.cached_triggers["automod"].update(
+                {x.id: {} for x in self.bot.guilds if x.id not in self.cached_triggers["automod"]}
+            )
 
         self.filled.set()
 
