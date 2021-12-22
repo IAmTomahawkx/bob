@@ -6,7 +6,7 @@ jishaku
 humanize
 psutil
 beautifulsoup4
-lxml
+lxml==4.7.1
 wavelink
 pillow
 colorama
