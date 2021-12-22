@@ -24,39 +24,39 @@ class SelfRoles(commands.Cog, name="Self Roles"):
         self.bot = bot
 
     @commands.Cog.listener()
-    async def on_interaction(self, interation: discord.Interaction):
-        if interation.type is not discord.InteractionType.component:
+    async def on_interaction(self, interaction: discord.Interaction):
+        if interaction.type is not discord.InteractionType.component:
             return
 
         query = "SELECT role_id, optin, optout FROM selfroles_roles INNER JOIN selfroles s on selfroles_roles.cfg_id = s.id WHERE interaction_cid = $1"
-        data = await self.bot.db.fetchrow(query, interation.data["custom_id"])
+        data = await self.bot.db.fetchrow(query, interaction.data["custom_id"])
 
         if not data:
             return
 
-        # await interation.response.defer()
+        await interaction.response.defer(ephemeral=True)
 
-        member: List[discord.Member] = await interation.guild.query_members(user_ids=[interation.user.id])
+        member: List[discord.Member] = await interaction.guild.query_members(user_ids=[interaction.user.id])
         if not member:  # ???
             print("no member?")
             return
 
         member: discord.Member = member[0]
-        role: discord.Role = interation.guild.get_role(data["role_id"])  # noqa
+        role: discord.Role = interaction.guild.get_role(data["role_id"])  # noqa
 
         if discord.utils.get(member.roles, id=data["role_id"]):
             if data["optout"]:
                 await member.remove_roles(role)  # noqa
-                await interation.response.send_message(f"You no longer have the {role.mention} role", ephemeral=True)
+                await interaction.followup.send(f"You no longer have the {role.mention} role", ephemeral=True)
             else:
-                await interation.response.send_message(f"You cannot opt out of the {role.mention} role", ephemeral=True)
+                await interaction.followup.send(f"You cannot opt out of the {role.mention} role", ephemeral=True)
 
         else:
             if data["optin"]:
                 await member.add_roles(role)  # noqa
-                await interation.response.send_message(f"You now have the {role.mention} role", ephemeral=True)
+                await interaction.followup.send(f"You now have the {role.mention} role", ephemeral=True)
             else:
-                await interation.response.send_message(f"You cannot opt in to the {role.mention} role", ephemeral=True)
+                await interaction.followup.send(f"You cannot opt in to the {role.mention} role", ephemeral=True)
 
     @commands.Cog.listener()
     async def on_raw_reaction_add(self, payload: discord.RawReactionActionEvent):
@@ -199,7 +199,7 @@ class SelfRoles(commands.Cog, name="Self Roles"):
             view, cids = views.create_selfrole_view(guild, roles)
             content = "Press the button for the corresponding role:\n"
             content += "\n".join(
-                f"{discord.utils.get(guild.emojis, id=r['emoji'])} - <@&{r['roles'][0]}>" for r in roles
+                f"{discord.utils.get(guild.emojis, id=r['emoji']) or r['emoji']} - <@&{r['roles'][0]}>" for r in roles
             )
 
             msg = await chnl.send(content, view=view, allowed_mentions=discord.AllowedMentions.none())
