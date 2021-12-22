@@ -184,4 +184,11 @@ CREATE TABLE IF NOT EXISTS persist_roles
     user_id BIGINT NOT NULL,
     role_id BIGINT NOT NULL,
     PRIMARY KEY (guild_id, user_id, role_id)
+);
+CREATE TABLE IF NOT EXISTS groups
+(
+    cfg_id INT PRIMARY KEY REFERENCES configs,
+    name TEXT,
+    roles BIGINT[],
+    members BIGINT[]
 )
