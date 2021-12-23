@@ -4,7 +4,7 @@ from typing import Optional, Union, Callable, TYPE_CHECKING, Dict, Any
 
 import discord
 from discord.ext import commands
-from . import paginator, players
+from . import paginator
 
 if TYPE_CHECKING:
     from .bot import Bot
