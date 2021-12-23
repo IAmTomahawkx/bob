@@ -53,10 +53,12 @@ class Commands(commands.Cog):
 
         cmd = self.command_cache[ctx.guild.id][self.command_lookup[ctx.guild.id][ctx.invoked_with]]
 
+        dispatch: Dispatch = self.bot.get_cog("Dispatch") # type: ignore
+        await dispatch.filled.wait()
+
         if not await self.can_run(ctx, cmd):
             return await ctx.reply("You do not have permission to run this command", mention_author=False, delete_after=3)
 
-        dispatch: Dispatch = self.bot.get_cog("Dispatch") # type: ignore
         parser = await dispatch.get_context(ctx.guild.id)
 
         await parser.run_command(ctx)
