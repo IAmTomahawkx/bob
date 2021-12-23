@@ -75,6 +75,19 @@ class Dispatch(commands.Cog):
             self.cached_triggers["automod"].update(
                 {x.id: {} for x in self.bot.guilds if x.id not in self.cached_triggers["automod"]}
             )
+            data = await conn.fetch(
+                """
+                SELECT
+                    "name",
+                    c.guild_id,
+                    roles,
+                    members
+                FROM "groups"
+                INNER JOIN configs c ON c.id = "groups".cfg_id
+                """
+            )
+            guilds = itertools.groupby(data, lambda k: k["guild_id"])
+            self.cached_triggers["groups"] = {x[0]: {k[0]: k[1] for k in x[1]} for x in guilds}
 
         self.filled.set()
 
@@ -83,6 +96,8 @@ class Dispatch(commands.Cog):
             del self.cached_triggers["configs"][guild_id]
             del self.cached_triggers["events"][guild_id]
             del self.cached_triggers["automod"][guild_id]
+            if guild_id in self.cached_triggers["groups"]:
+                del self.cached_triggers["groups"][guild_id]
 
         if guild_id in self.ctx_cache:
             del self.ctx_cache[guild_id]
