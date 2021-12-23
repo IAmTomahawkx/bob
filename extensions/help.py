@@ -34,6 +34,9 @@ class HelpMenu(ui.View):
         self.current: Union[Ellipsis, commands.Cog, commands.Command] = ...
         self.page = 0
 
+    async def on_timeout(self) -> None:
+        await self.message.edit(embed=self.message.embeds[0], view=None)
+
     def get_command_signature(self, command: commands.Command, short: bool) -> str:
         usage: List[helping.BaseHelper] = command.usage  # noqa
         if not usage:
