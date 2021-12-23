@@ -87,11 +87,10 @@ class Dispatch(commands.Cog):
                 """
             )
             guilds = itertools.groupby(data, lambda k: k["guild_id"])
-            self.cached_triggers["groups"] = {x[0]: {k['name']: {
-                "roles": k["roles"],
-                "users": k["users"],
-                "name": k["name"]
-            } for k in x[1]} for x in guilds}
+            self.cached_triggers["groups"] = {
+                x[0]: {k["name"]: {"roles": k["roles"], "users": k["users"], "name": k["name"]} for k in x[1]}
+                for x in guilds
+            }
 
         self.filled.set()
 

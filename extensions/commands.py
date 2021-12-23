@@ -13,6 +13,7 @@ if TYPE_CHECKING:
 def setup(bot: Bot):
     bot.add_cog(Commands(bot))
 
+
 class PartialCommand(TypedDict):
     id: int
     cfg_id: int
@@ -53,11 +54,13 @@ class Commands(commands.Cog):
 
         cmd = self.command_cache[ctx.guild.id][self.command_lookup[ctx.guild.id][ctx.invoked_with]]
 
-        dispatch: Dispatch = self.bot.get_cog("Dispatch") # type: ignore
+        dispatch: Dispatch = self.bot.get_cog("Dispatch")  # type: ignore
         await dispatch.filled.wait()
 
         if not await self.can_run(ctx, cmd):
-            return await ctx.reply("You do not have permission to run this command", mention_author=False, delete_after=3)
+            return await ctx.reply(
+                "You do not have permission to run this command", mention_author=False, delete_after=3
+            )
 
         parser = await dispatch.get_context(ctx.guild.id)
 
@@ -119,7 +122,7 @@ class Commands(commands.Cog):
         if not cmd["permission_group"]:
             return True
 
-        dispatch: Dispatch = self.bot.get_cog("Dispatch") # type: ignore
+        dispatch: Dispatch = self.bot.get_cog("Dispatch")  # type: ignore
         if not dispatch:
             return False
 
@@ -127,7 +130,7 @@ class Commands(commands.Cog):
         if ctx.author.id in group["users"]:
             return True
 
-        elif any(ctx.author._roles.has(x) for x in group["roles"]): # noqa
+        elif any(ctx.author._roles.has(x) for x in group["roles"]):  # noqa
             return True
 
         return False

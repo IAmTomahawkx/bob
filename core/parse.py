@@ -760,14 +760,14 @@ class ParsingContext:
         try:
             raw = view.get_quoted_word() if not is_last else view.read_rest()
             if not raw and not arg["optional"]:
-                raise ExecutionInterrupt(f"Failed to parse argument '{arg['name']}': Expected user input, got nothing", stack)
+                raise ExecutionInterrupt(
+                    f"Failed to parse argument '{arg['name']}': Expected user input, got nothing", stack
+                )
 
             elif not raw:
                 return None
 
-            return await typs[arg["type"]](
-                self, arg["name"], ctx, raw.strip()
-            )
+            return await typs[arg["type"]](self, arg["name"], ctx, raw.strip())
         except ExecutionInterrupt:
             raise
 
