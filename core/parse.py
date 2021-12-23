@@ -265,7 +265,10 @@ class ParsingContext:
         await self.fetch_required_data()
 
         async with self.bot.db.acquire() as conn:
-            await self.parse_command(ctx, conn)
+            try:
+                await self.parse_command(ctx, conn)
+            except ExecutionInterrupt as e:
+                await ctx.reply(str(e), mention_author=False)
 
     async def format_fmt(
         self, fmt: str, conn: asyncpg.Connection, stack: List[str], vbls: PARSE_VARS = None, try_int=False
@@ -717,7 +720,12 @@ class ParsingContext:
         }
         ln = len(cmd["args"]) - 1
         for i, x in enumerate(cmd["args"]):
-            vbls.update(await self.parse_command_arg(ctx, x, ctx.view, stack, i == ln))
+            stack.append(f"argument #{i+1} ({x['name']})")
+            ret = await self.parse_command_arg(ctx, x, ctx.view, stack, i == ln)
+            if ret is not None:
+                vbls.update(ret)
+
+            stack.pop()
 
         for i, runner in enumerate(cmd["actions"]):
             runner = self.actions[runner]
@@ -750,9 +758,19 @@ class ParsingContext:
         }
 
         try:
+            raw = view.get_quoted_word() if not is_last else view.read_rest()
+            if not raw and not arg["optional"]:
+                raise ExecutionInterrupt(f"Failed to parse argument '{arg['name']}': Expected user input, got nothing", stack)
+
+            elif not raw:
+                return None
+
             return await typs[arg["type"]](
-                self, arg["name"], ctx, view.get_quoted_word() if not is_last else view.read_rest()
+                self, arg["name"], ctx, raw.strip()
             )
+        except ExecutionInterrupt:
+            raise
+
         except Exception as e:
             if arg["optional"]:
                 view.undo()
