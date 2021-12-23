@@ -112,7 +112,7 @@ class Bot(commands.Bot):
 
         self.load_extension("jishaku")
         for ext in os.listdir("extensions"):
-            if not ext.endswith(".py"):
+            if not ext.endswith(".py") or ext.startswith("_"):
                 continue
 
             self.load_extension(f"extensions.{ext[:-3]}")
@@ -141,8 +141,8 @@ class Bot(commands.Bot):
 
         ctx = await self.get_context(message, cls=Context)
         if not ctx.valid:
-            cog = self.get_cog("Bull")
-            await cog.run_ping(ctx)  # type: ignore
+            customcmd = self.get_cog("Commands")
+            await customcmd.dispatch_hook(ctx) # noqa
         else:
             await self.invoke(ctx)
 
