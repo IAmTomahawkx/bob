@@ -1,7 +1,7 @@
 from __future__ import annotations
 import itertools
 import contextvars
-from typing import Optional, List, Union
+from typing import Optional, List, Union, TYPE_CHECKING, Dict, Any
 
 import datetime
 import re
@@ -18,6 +18,9 @@ from .bot import Bot
 from .context import Context
 from .time import ShortTime, human_timedelta
 from .ast import *
+
+if TYPE_CHECKING:
+    from extensions.commands import Command as DispatcherCommand
 
 
 class ParsingContext:
@@ -258,8 +261,11 @@ class ParsingContext:
 
         stack.pop()
 
-    async def run_command(self, name: str, msg: discord.Message):
+    async def run_command(self, ctx: Context):
         await self.fetch_required_data()
+
+        async with self.bot.db.acquire() as conn:
+            await self.parse_command(ctx, conn)
 
     async def format_fmt(
         self, fmt: str, conn: asyncpg.Connection, stack: List[str], vbls: PARSE_VARS = None, try_int=False
@@ -689,8 +695,9 @@ class ParsingContext:
 
         return true_output
 
-    async def parse_command(self, message: discord.Message, conn: asyncpg.Connection, invoker: str, view: StringView):
-        ctx = Context(prefix=None, view=view, bot=self.bot, message=message)
+    async def parse_command(self, ctx: Context, conn: asyncpg.Connection):
+        invoker = ctx.invoked_with
+        message = ctx.message
         await self.fetch_required_data()
 
         if invoker not in self.commands:
@@ -710,7 +717,7 @@ class ParsingContext:
         }
         ln = len(cmd["args"]) - 1
         for i, x in enumerate(cmd["args"]):
-            vbls.update(await self.parse_command_arg(ctx, x, view, stack, i == ln))
+            vbls.update(await self.parse_command_arg(ctx, x, ctx.view, stack, i == ln))
 
         for i, runner in enumerate(cmd["actions"]):
             runner = self.actions[runner]
