@@ -81,7 +81,7 @@ class Dispatch(commands.Cog):
                     "name",
                     c.guild_id,
                     roles,
-                    members
+                    users
                 FROM "groups"
                 INNER JOIN configs c ON c.id = "groups".cfg_id
                 """
@@ -150,7 +150,7 @@ class Dispatch(commands.Cog):
             SELECT
                 name,
                 roles,
-                members
+                users
             FROM groups
             INNER JOIN configs c on groups.cfg_id = c.id
             WHERE c.id = (SELECT MAX(id) FROM configs WHERE configs.guild_id = $1)

@@ -190,5 +190,5 @@ CREATE TABLE IF NOT EXISTS groups
     cfg_id INT PRIMARY KEY REFERENCES configs,
     name TEXT,
     roles BIGINT[],
-    members BIGINT[]
+    users BIGINT[]
 )
