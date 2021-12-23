@@ -93,6 +93,23 @@ class Number(BaseHelper):
 
         return f"<{self.name}: Channel(s)>"
 
+class Boolean(BaseHelper):
+    description = "A boolean (yes/no)"
+    example = "yes"
+
+    @property
+    def short(self) -> str:
+        if self.optional:
+            return "[Boolean]"
+
+        return "<Boolean>"
+
+    @property
+    def long(self) -> str:
+        if self.optional:
+            return f"[{self.name}: Boolean]"
+
+        return f"<{self.name}: Boolean>"
 
 class Member(BaseHelper):
     description = "A member of the server. You can ping them, use their name, or their id as the argument."
