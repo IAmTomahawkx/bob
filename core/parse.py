@@ -638,7 +638,8 @@ class ParsingContext:
                 if isinstance(x, BiOpExpr):
                     if not out:
                         raise ExecutionInterrupt(
-                            f"| {parsable}\n| {' '*x.token.start}{'^'*(x.token.end-x.token.start)}\n| Unexpected comparison here",
+                            f"| {parsable}\n| {' '*x.token.start}{'^'*(x.token.end-x.token.start)}\n| Unexpected comparison here\n" +
+                            fr"| HINT: If you're not trying to compare something, escape the '{x.value}' like this: '\\{x.value}'",
                             stack,
                         )
 
