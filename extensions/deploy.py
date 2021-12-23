@@ -257,6 +257,13 @@ class Config(commands.Cog):
 
                 step += 1
                 await update_msg()
+
+                if cfg.groups:
+                    await conn.executemany(
+                        "INSERT INTO groups (cfg_id, name, roles, members) VALUES ($1, $2, $3, $4)",
+                        [(cid, x["name"], x["roles"], x["users"]) for x in cfg.groups.values()]
+                    )
+
                 selfroles = self.bot.get_cog("Self Roles")
                 if not selfroles and cfg.selfroles:
                     await update_msg("Failed to update selfroles: Extension not found")
