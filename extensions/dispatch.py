@@ -145,6 +145,20 @@ class Dispatch(commands.Cog):
         )
         self.cached_triggers["automod"][guild_id] = {x["event"]: dict(x) for x in data}
 
+        data = await conn.fetch(
+            """
+            SELECT
+                name,
+                roles,
+                members
+            FROM groups
+            INNER JOIN configs c on groups.cfg_id = c.id
+            WHERE c.id = (SELECT MAX(id) FROM configs WHERE configs.guild_id = $1)
+            """,
+            guild_id
+        )
+        self.cached_triggers["groups"][guild_id] = {x["name"]: dict(x) for x in data}
+
         self.filled.set()
 
     async def get_context(self, guild_id: int) -> parse.ParsingContext:
