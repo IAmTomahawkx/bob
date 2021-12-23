@@ -358,7 +358,7 @@ async def parse_guild_groups(ctx: Context, cfg: Union[_t, List[_t]]) -> Dict[str
             if name in resp:
                 raise ConfigLoadError(f"Duplicate groups with name '{name}'")
             _roles = grp.get("roles")
-            _users = grp.get("members")
+            _users = grp.get("users")
 
             roles: List[int] = []
             users: List[int] = []
