@@ -189,7 +189,7 @@ class GuildConfig:
         self.counters: Dict[str, ConfigCounter] = {}
         self.events = []
         self.automod_events: Dict[str, Automod] = {}
-        self.loggers = {}
+        self.loggers: Dict[str, Logger] = {}
         self.commands: Dict[str, Command] = {}
 
 
