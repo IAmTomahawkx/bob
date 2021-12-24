@@ -56,7 +56,7 @@ class HelpMenu(ui.View):
 
     def get_customcommand_signature(self, command, short: bool) -> str:
         usage: List[helping.BaseHelper] = command["args"]  # noqa
-        if not usage:
+        if not usage and short:
             return "This command does not take any arguments"
 
         if short:
@@ -209,7 +209,7 @@ class HelpMenu(ui.View):
         for command in cmds[0: self.MAX_COMMANDS_PER_PAGE]:
             e.add_field(
                 name=command["name"],
-                value=f"`{self.get_customcommand_signature(command, False)}`\n{command['help']}",
+                value=f"`{self.get_customcommand_signature(command, True)}`\n{command['help']}",
                 inline=False,
             )
             btn = ui.Button(style=discord.ButtonStyle.grey, label=command["name"], custom_id=command["name"], row=2)
