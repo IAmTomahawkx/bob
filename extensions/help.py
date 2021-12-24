@@ -41,7 +41,10 @@ class HelpMenu(ui.View):
 
     def get_command_signature(self, command: commands.Command, short: bool) -> str:
         usage: List[helping.BaseHelper] = command.usage  # noqa
-        if not usage:
+        if not usage and not command.signature:
+            return "This command does not take any arguments"
+
+        elif not usage:
             return command.signature
 
         if short:
@@ -53,6 +56,9 @@ class HelpMenu(ui.View):
 
     def get_customcommand_signature(self, command, short: bool) -> str:
         usage: List[helping.BaseHelper] = command["args"]  # noqa
+        if not usage:
+            return "This command does not take any arguments"
+
         if short:
             resp = " ".join(x.short for x in usage)
         else:
