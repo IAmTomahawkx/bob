@@ -10,18 +10,19 @@ from .context import Context
 
 __all__ = ("ConfigFileConverter", "RegexConverter")
 
+config_session: Optional[aiohttp.ClientSession] = None # I hate to use globals but unfortunately if I want to keep using the same session I have to
+
 
 class ConfigFileConverter(Converter):
-    def __init__(self):
-        self.session: Optional[aiohttp.ClientSession] = None
-
     async def convert(self, ctx: Context, argument: str):
-        if not self.session:
-            self.session = aiohttp.ClientSession(headers={"User-Agent": "BOB discord bot; Configuration sniffer"})
-
+        global config_session
         if argument.startswith("http"):  # looks like a url link, follow it
             try:
-                async with self.session.get(argument) as resp:
+                if not config_session:
+                    config_session = aiohttp.ClientSession(
+                        headers={"User-Agent": "BOB discord bot; Configuration sniffer"})
+
+                async with config_session.get(argument) as resp:
                     if 200 > resp.status > 299:
                         raise BadArgument(f"Received a non-ok HTTP response from `{argument}`")
 
