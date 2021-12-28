@@ -121,9 +121,6 @@ class Bot(commands.Bot):
         await self.setup()
         await self.connect(reconnect=True)
 
-    async def on_interaction(self, interaction):
-        await super().on_interaction(interaction)
-
     async def on_ready(self):
         print(self.user)
 
