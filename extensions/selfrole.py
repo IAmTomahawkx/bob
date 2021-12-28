@@ -144,7 +144,11 @@ class SelfRoles(commands.Cog, name="Self Roles"):
             data = await conn.fetch(query, [x["id"] for x in previous])
             for d in data:
                 channel: discord.TextChannel = guild.get_channel(d["channel_id"])
-                msg: discord.Message = await channel.fetch_message(d["msg_id"])
+                try:
+                    msg: discord.Message = await channel.fetch_message(d["msg_id"])
+                except discord.NotFound:
+                    continue
+
                 if msg.author == self.bot.user:  # these will be recreated
                     try:
                         await msg.delete()
