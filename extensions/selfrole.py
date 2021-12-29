@@ -50,14 +50,22 @@ class SelfRoles(commands.Cog, name="Self Roles"):
                 try:
                     await member.remove_roles(role)  # noqa
                 except discord.Forbidden:
-                    await interaction.response.send_message(f"Failed to remove the role due to your server's role hierarchy",
-                                                            ephemeral=True)
-                    await self.dispatch_error(f"Cannot remove role {role.mention} from user {member.mention} due to your role heiarchy. Please place the bot's top role above the role you're trying to manage", member.guild.id)
+                    await interaction.response.send_message(
+                        f"Failed to remove the role due to your server's role hierarchy", ephemeral=True
+                    )
+                    await self.dispatch_error(
+                        f"Cannot remove role {role.mention} from user {member.mention} due to your role heiarchy. Please place the bot's top role above the role you're trying to manage",
+                        member.guild.id,
+                    )
 
                 else:
-                    await interaction.response.send_message(f"You no longer have the {role.mention} role", ephemeral=True)
+                    await interaction.response.send_message(
+                        f"You no longer have the {role.mention} role", ephemeral=True
+                    )
             else:
-                await interaction.response.send_message(f"You cannot opt out of the {role.mention} role", ephemeral=True)
+                await interaction.response.send_message(
+                    f"You cannot opt out of the {role.mention} role", ephemeral=True
+                )
 
         else:
             if data["optin"]:
@@ -65,9 +73,12 @@ class SelfRoles(commands.Cog, name="Self Roles"):
                     await member.add_roles(role)  # noqa
                 except discord.Forbidden:
                     await interaction.response.send_message(
-                        f"Failed to add the role due to your server's role hierarchy",
-                        ephemeral=True)
-                    await self.dispatch_error(f"Cannot add role {role.mention} to user {member.mention} due to your role heiarchy. Please place the bot's top role above the role you're trying to manage", member.guild.id)
+                        f"Failed to add the role due to your server's role hierarchy", ephemeral=True
+                    )
+                    await self.dispatch_error(
+                        f"Cannot add role {role.mention} to user {member.mention} due to your role heiarchy. Please place the bot's top role above the role you're trying to manage",
+                        member.guild.id,
+                    )
 
                 else:
                     await interaction.response.send_message(f"You now have the {role.mention} role", ephemeral=True)
@@ -153,7 +164,7 @@ class SelfRoles(commands.Cog, name="Self Roles"):
                 )
 
     async def dispatch_error(self, error: str, guild_id: int):
-        dispatch: Dispatch = self.bot.get_cog("Dispatch") # type: ignore
+        dispatch: Dispatch = self.bot.get_cog("Dispatch")  # type: ignore
         ctx = await dispatch.get_context(guild_id)
         await self.bot.get_guild(guild_id).get_channel(ctx.error_channel).send(error)
 
