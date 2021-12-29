@@ -101,18 +101,14 @@ class HelpMenu(ui.View):
 
         # custom commands
         if self.custom_commands is None:
-            context: ParsingContext = await self.context.bot.get_cog("Dispatch").get_context(self.context.guild.id) # type: ignore
+            context: ParsingContext = await self.context.bot.get_cog("Dispatch").get_context(self.context.guild.id)  # type: ignore
             await context.fetch_required_data()
             cmds = self.custom_commands = {}
             for name, command in context.commands.items():
                 cmds[name] = self.compile_custom_command_data(command, name)
 
         if self.custom_commands:
-            e.add_field(
-                name="Custom Commands",
-                value="Your server's custom-built commands.",
-                inline=False
-            )
+            e.add_field(name="Custom Commands", value="Your server's custom-built commands.", inline=False)
             btn = ui.Button(style=discord.ButtonStyle.grey, label="Custom Commands", custom_id="_customcommands")
             btn.callback = self.handle_customcommands_press
             self.add_item(btn)
@@ -206,7 +202,7 @@ class HelpMenu(ui.View):
             btn.callback = self.handle_page_next
             self.add_item(btn)
 
-        for command in cmds[0: self.MAX_COMMANDS_PER_PAGE]:
+        for command in cmds[0 : self.MAX_COMMANDS_PER_PAGE]:
             e.add_field(
                 name=command["name"],
                 value=f"`{self.get_customcommand_signature(command, True)}`\n{command['help']}",
@@ -295,12 +291,7 @@ class HelpMenu(ui.View):
             t = _cc_tranforms[arg["type"]]
             args.append(t(arg["name"], arg["optional"]))
 
-        return {
-            "name": name,
-            "args": args,
-            "help": command["help"].strip(),
-            "group": command["group"]
-        }
+        return {"name": name, "args": args, "help": command["help"].strip(), "group": command["group"]}
 
 
 _cc_tranforms = {
@@ -309,8 +300,9 @@ _cc_tranforms = {
     "boolean": helping.Boolean,
     "role": helping.Role,
     "channel": helping.Channel,
-    "user": helping.User
+    "user": helping.User,
 }
+
 
 class HelpCommand(commands.HelpCommand):
     async def send_bot_help(self, mapping: Mapping):

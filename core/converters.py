@@ -10,7 +10,9 @@ from .context import Context
 
 __all__ = ("ConfigFileConverter", "RegexConverter")
 
-config_session: Optional[aiohttp.ClientSession] = None # I hate to use globals but unfortunately if I want to keep using the same session I have to
+config_session: Optional[
+    aiohttp.ClientSession
+] = None  # I hate to use globals but unfortunately if I want to keep using the same session I have to
 
 
 class ConfigFileConverter(Converter):
@@ -20,7 +22,8 @@ class ConfigFileConverter(Converter):
             try:
                 if not config_session:
                     config_session = aiohttp.ClientSession(
-                        headers={"User-Agent": "BOB discord bot; Configuration sniffer"})
+                        headers={"User-Agent": "BOB discord bot; Configuration sniffer"}
+                    )
 
                 async with config_session.get(argument) as resp:
                     if 200 > resp.status > 299:

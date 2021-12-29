@@ -47,17 +47,8 @@ def _convert_bool(arg: Any):
     else:
         raise ValueError("bad argument given to convert_bool")
 
-ALLOWED_KEYS = {
-    "error-channel",
-    "mute-role",
-    "group",
-    "selfrole",
-    "counter",
-    "event",
-    "logging",
-    "automod",
-    "command"
-}
+
+ALLOWED_KEYS = {"error-channel", "mute-role", "group", "selfrole", "counter", "event", "logging", "automod", "command"}
 
 
 async def parse_guild_config(cfg: str, ctx: Context) -> GuildConfig:
@@ -116,7 +107,6 @@ async def parse_guild_config(cfg: str, ctx: Context) -> GuildConfig:
     for name, event in config.commands.items():
         for i, action in enumerate(event["actions"], start=1):
             await postextract_resolve_action(config, action, f"Verifying command '{name}' action #{i}")
-
 
     return config
 
@@ -891,6 +881,7 @@ async def static_parse(parsable: str, context: str, strict_errors=False) -> List
     true_output = recurse_biops(output)
     return true_output
 
+
 async def postextract_resolve_action(cfg: GuildConfig, action: Actions, context: str):
     if action["condition"] is not None:
         tokens = arg_lex.run_lex(action["condition"])
@@ -898,9 +889,7 @@ async def postextract_resolve_action(cfg: GuildConfig, action: Actions, context:
 
     if "log" in action:
         if action["log"] not in cfg.loggers:
-            raise ConfigLoadError(
-                f"{context}\n| Could not find logger '{action['log']}'"
-            )
+            raise ConfigLoadError(f"{context}\n| Could not find logger '{action['log']}'")
 
         if isinstance(cfg.loggers[action["log"]]["format"], dict):
             if "event" in action and action["event"] not in cfg.loggers[action["log"]]["format"]:
@@ -909,15 +898,12 @@ async def postextract_resolve_action(cfg: GuildConfig, action: Actions, context:
                 )
 
         elif "event" in action:
-            raise ConfigLoadError(
-                f"{context}\n| Cannot specify a logging event (format) for a single-event logger"
-            )
+            raise ConfigLoadError(f"{context}\n| Cannot specify a logging event (format) for a single-event logger")
 
     elif "dispatch" in action:
-        if action["dispatch"] not in cfg._event_names: # noqa
-            raise ConfigLoadError(
-                f"{context}\n| Could not find event '{action['dispatch']}'"
-            )
+        if action["dispatch"] not in cfg._event_names:  # noqa
+            raise ConfigLoadError(f"{context}\n| Could not find event '{action['dispatch']}'")
+
 
 def resolve_data(data: List[arg_lex.Token], raw_line: str, cfg: GuildConfig, context: str):
     for x in data:
@@ -928,4 +914,4 @@ def resolve_data(data: List[arg_lex.Token], raw_line: str, cfg: GuildConfig, con
                 )
 
         elif x.name == "Var":
-            ... # TODO somehow parse variables?
+            ...  # TODO somehow parse variables?
