@@ -31,7 +31,7 @@ def create_selfrole_view(guild: discord.Guild, models: List[SelfRole]) -> Tuple[
 
                     rows[role] = cid
 
-                    b = discord.ui.Button(style=discord.ButtonStyle.primary, label=text, emoji=emoji, custom_id=cid)
+                    b = discord.ui.Button(style=discord.ButtonStyle.secondary, label=text, emoji=emoji, custom_id=cid)
                     b.callback = _dummy_callback
                     self.add_item(b)
 
