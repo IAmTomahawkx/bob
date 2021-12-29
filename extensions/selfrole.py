@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import itertools
-from typing import List
+from typing import List, TYPE_CHECKING
 
 import asyncpg
 import discord
@@ -11,6 +11,9 @@ from core.context import Context
 from core.bot import Bot
 from core.extractor import ConfigLoadError
 from core import views, models
+
+if TYPE_CHECKING:
+    from .dispatch import Dispatch
 
 
 def setup(bot):
@@ -34,8 +37,6 @@ class SelfRoles(commands.Cog, name="Self Roles"):
         if not data:
             return
 
-        await interaction.response.defer(ephemeral=True)
-
         member: List[discord.Member] = await interaction.guild.query_members(user_ids=[interaction.user.id])
         if not member:  # ???
             print("no member?")
@@ -46,17 +47,32 @@ class SelfRoles(commands.Cog, name="Self Roles"):
 
         if discord.utils.get(member.roles, id=data["role_id"]):
             if data["optout"]:
-                await member.remove_roles(role)  # noqa
-                await interaction.followup.send(f"You no longer have the {role.mention} role", ephemeral=True)
+                try:
+                    await member.remove_roles(role)  # noqa
+                except discord.Forbidden:
+                    await interaction.response.send_message(f"Failed to remove the role due to your server's role hierarchy",
+                                                            ephemeral=True)
+                    await self.dispatch_error(f"Cannot remove role {role.mention} from user {member.mention} due to your role heiarchy. Please place the bot's top role above the role you're trying to manage", member.guild.id)
+
+                else:
+                    await interaction.response.send_message(f"You no longer have the {role.mention} role", ephemeral=True)
             else:
-                await interaction.followup.send(f"You cannot opt out of the {role.mention} role", ephemeral=True)
+                await interaction.response.send_message(f"You cannot opt out of the {role.mention} role", ephemeral=True)
 
         else:
             if data["optin"]:
-                await member.add_roles(role)  # noqa
-                await interaction.followup.send(f"You now have the {role.mention} role", ephemeral=True)
+                try:
+                    await member.add_roles(role)  # noqa
+                except discord.Forbidden:
+                    await interaction.response.send_message(
+                        f"Failed to add the role due to your server's role hierarchy",
+                        ephemeral=True)
+                    await self.dispatch_error(f"Cannot add role {role.mention} to user {member.mention} due to your role heiarchy. Please place the bot's top role above the role you're trying to manage", member.guild.id)
+
+                else:
+                    await interaction.response.send_message(f"You now have the {role.mention} role", ephemeral=True)
             else:
-                await interaction.followup.send(f"You cannot opt in to the {role.mention} role", ephemeral=True)
+                await interaction.response.send_message(f"You cannot opt in to the {role.mention} role", ephemeral=True)
 
     @commands.Cog.listener()
     async def on_raw_reaction_add(self, payload: discord.RawReactionActionEvent):
@@ -135,6 +151,11 @@ class SelfRoles(commands.Cog, name="Self Roles"):
                     f"I do not have permission to remove {guild.get_role(match).mention} role from {member.mention}",
                     delete_after=5,
                 )
+
+    async def dispatch_error(self, error: str, guild_id: int):
+        dispatch: Dispatch = self.bot.get_cog("Dispatch") # type: ignore
+        ctx = await dispatch.get_context(guild_id)
+        await self.bot.get_guild(guild_id).get_channel(ctx.error_channel).send(error)
 
     async def config_hook(self, cfg: models.GuildConfig, conn: asyncpg.Connection):
         guild: discord.Guild = self.bot.get_guild(cfg.guild_id)
