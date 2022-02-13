@@ -14,7 +14,6 @@ tabulate
 asyncpg
 lru_dict
 pynacl
-viper-lang
 pytz
 ujson
 git+https://github.com/sethcall/toml.git
