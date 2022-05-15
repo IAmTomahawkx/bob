@@ -639,7 +639,7 @@ class ParsingContext:
                     if not out:
                         raise ExecutionInterrupt(
                             f"| {parsable}\n| {' '*x.token.start}{'^'*(x.token.end-x.token.start)}\n| Unexpected comparison here\n"
-                            + fr"| HINT: If you're not trying to compare something, escape the '{x.value}' like this: '\\{x.value}'",
+                            + rf"| HINT: If you're not trying to compare something, escape the '{x.value}' like this: '\\{x.value}'",
                             stack,
                         )
 
@@ -650,7 +650,7 @@ class ParsingContext:
                         raise ExecutionInterrupt(
                             f"| {parsable}\n| {' '*x.token.start}{'^'*(x.token.end-x.token.start)}\n| "
                             "Unexpected comparison here: missing something to compare to\n"
-                            fr"| HINT: If you're not trying to compare something, escape the '{x.value}' like this: '\\{x.value}'",
+                            rf"| HINT: If you're not trying to compare something, escape the '{x.value}' like this: '\\{x.value}'",
                             stack,
                         )
 
@@ -684,7 +684,7 @@ class ParsingContext:
                         raise ExecutionInterrupt(
                             f"| {parsable}\n| {' '*x.token.start}{'^'*(x.token.end-x.token.start)}\n| "
                             "Unexpected chained comparison here: missing something a comparison on the right side\n"
-                            fr"| HINT: If you're not trying to chain something, escape the '{x.value}' like this: '\\{x.value}'",
+                            rf"| HINT: If you're not trying to chain something, escape the '{x.value}' like this: '\\{x.value}'",
                             stack,
                         )
 
