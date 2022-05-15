@@ -170,6 +170,7 @@ class SelfRoles(commands.Cog, name="Self Roles"):
 
     async def config_hook(self, cfg: models.GuildConfig, conn: asyncpg.Connection):
         guild: discord.Guild = self.bot.get_guild(cfg.guild_id)
+        error_channel = guild.get_channel(cfg.error_channel)
         previous = await conn.fetch("SELECT id FROM selfroles WHERE guild_id = $1", cfg.guild_id)
         if previous:
             query = "SELECT channel_id, msg_id FROM selfroles_roles WHERE msg_id IS NOT NULL AND cfg_id = ANY($1)"
@@ -198,6 +199,8 @@ class SelfRoles(commands.Cog, name="Self Roles"):
             await conn.executemany("INSERT INTO selfroles_roles VALUES ($1, $2)", [(sid, r) for r in x["roles"]])
 
         reactions = list(filter(lambda x: x["mode"] is models.SelfRoleMode.reaction, cfg.selfroles))
+        errors = []
+
         for x in reactions:
             chnl: discord.TextChannel = guild.get_channel(x["channel"])
             if not x["message"]:
@@ -207,17 +210,17 @@ class SelfRoles(commands.Cog, name="Self Roles"):
 
             if isinstance(x["emoji"], int):
                 emoji = discord.utils.get(guild.emojis, id=x["emoji"])
+
             else:
                 emoji = x["emoji"]
 
-            try:
-                await msg.add_reaction(emoji)
-            except discord.Forbidden:
-                raise ConfigLoadError(
-                    f"Could not add the reaction {emoji} to selfrole. Message id: {msg.id}. Channel: {chnl.mention}"
-                )
-            except discord.HTTPException:
-                pass
+            if emoji is None:
+                errors.append((x["emoji"], msg.jump_url))
+            else:
+                try:
+                    await msg.add_reaction(emoji)
+                except:
+                    errors.append((emoji, msg.jump_url))
 
             query = "INSERT INTO selfroles (mode, guild_id, optin, optout) VALUES ($1, $2, $3, $4) RETURNING id"
             sid = await conn.fetchval(query, x["mode"].to_int(), cfg.guild_id, x["optin"], x["optout"])
@@ -225,6 +228,11 @@ class SelfRoles(commands.Cog, name="Self Roles"):
                 "INSERT INTO selfroles_roles (cfg_id, role_id, msg_id, channel_id, reaction) VALUES ($1, $2, $3, $4, $5)",
                 [(sid, r, msg.id, chnl.id, str(x["emoji"])) for r in x["roles"]],
             )
+
+        fmt = "\n".join((f"{x[0]}: {x[1]}" for x in errors))
+        await error_channel.send(
+            f"Failed to react with the following emojis:\n{fmt}\nThey'll still work, but you'll have to react manually"
+        )
 
         buttons = itertools.groupby(
             list(filter(lambda x: x["mode"] is models.SelfRoleMode.button, cfg.selfroles)), lambda x: x["channel"]
