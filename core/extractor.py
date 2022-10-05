@@ -841,7 +841,7 @@ async def static_parse(parsable: str, context: str, strict_errors=False) -> List
                     raise ConfigLoadError(
                         f"{context}\n| {parsable}\n| {' '*x.token.start}{'^'*(x.token.end-x.token.start)}\n| "
                         "Unexpected comparison here: missing something to compare to\n"
-                        fr"| HINT: If you're not trying to compare something, escape the '{x.value}' like this: '\\{x.value}'"
+                        rf"| HINT: If you're not trying to compare something, escape the '{x.value}' like this: '\\{x.value}'"
                     )
 
                 out.append(x)
@@ -873,7 +873,7 @@ async def static_parse(parsable: str, context: str, strict_errors=False) -> List
                     raise ConfigLoadError(
                         f"{context}\n| {parsable}\n| {' '*x.token.start}{'^'*(x.token.end-x.token.start)}\n| "
                         "Unexpected chained comparison here: missing something a comparison on the right side\n"
-                        fr"| HINT: If you're not trying to chain something, escape the '{x.value}' like this: '\\{x.value}'"
+                        rf"| HINT: If you're not trying to chain something, escape the '{x.value}' like this: '\\{x.value}'"
                     )
 
                 outp.append(x)
