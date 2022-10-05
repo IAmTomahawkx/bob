@@ -1331,6 +1331,7 @@ async def builtin_match(
 
     return comp == come
 
+
 @_name("capturetext")
 async def builtin_capture_text_from_regex(
     ctx: ParsingContext, conn: asyncpg.Connection, vbls: PARSE_VARS, stack: List[str], args: List[BaseAst]
@@ -1352,7 +1353,7 @@ async def builtin_capture_text_from_regex(
 
     for n, group in enumerate(finds):
         try:
-            name = await args[n+2].access(ctx, vbls, conn)
+            name = await args[n + 2].access(ctx, vbls, conn)
             if not isinstance(name, str):
                 raise ExecutionInterrupt(f"Argument {n+1}: Expected text, not {name.__class__.__name__}", stack)
 
@@ -1360,7 +1361,9 @@ async def builtin_capture_text_from_regex(
                 raise ExecutionInterrupt(f"Argument {n+1}: Attempted to assign to variable that already exists", stack)
 
         except IndexError:
-            raise ExecutionInterrupt(f"Argument {n+1}: Expected an argument, as your regex has a group to assign to it", stack)
+            raise ExecutionInterrupt(
+                f"Argument {n+1}: Expected an argument, as your regex has a group to assign to it", stack
+            )
 
         if name == "_":
             continue
@@ -1369,7 +1372,9 @@ async def builtin_capture_text_from_regex(
 
     return True
 
+
 EMOJI_RE = re.compile(r"<a?:([a-zA-Z0-9_]+):([0-9]+)>|([0-9]{18,23})")
+
 
 @_name("addreaction", 1)
 async def builtin_add_reaction(
@@ -1385,17 +1390,19 @@ async def builtin_add_reaction(
         ids = reg.groups()[1:]
         if any(ids):
             ids = ids[0] or ids[1]
-            resolved = discord.utils.get(ctx.guild.emojis, id = ids)
+            resolved = discord.utils.get(ctx.guild.emojis, id=ids)
 
     if not resolved:
-        resolved = discord.utils.get(ctx.guild.emojis, name = emote)
+        resolved = discord.utils.get(ctx.guild.emojis, name=emote)
 
     if not resolved:
         raise ExecutionInterrupt("Argument 1: No emoji found with that name/id in your server", stack)
 
     msg: Optional[discord.Message] = ctx.message.get()
     if not msg:
-        raise ExecutionInterrupt("This context was not invoked from a message event. Could not add a reaction to nothing!", stack)
+        raise ExecutionInterrupt(
+            "This context was not invoked from a message event. Could not add a reaction to nothing!", stack
+        )
 
     await msg.add_reaction(resolved)
     return ""
@@ -1423,5 +1430,6 @@ async def builtin_is_message_context(
     ctx: ParsingContext, conn: asyncpg.Connection, vbls: PARSE_VARS, stack: List[str], args: List[BaseAst]
 ):
     return ctx.message.get() is not None
+
 
 FROZEN_BUILTINS = set(BUILTINS.keys())

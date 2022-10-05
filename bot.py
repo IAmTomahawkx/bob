@@ -9,6 +9,7 @@ try:
 except:
     pass
 
+
 async def main():
     bot = Bot()
     async with bot:
@@ -22,6 +23,7 @@ async def main():
 
             if not bot.is_closed():
                 await bot.close()
+
 
 if __name__ == "__main__":
     bot = Bot()
