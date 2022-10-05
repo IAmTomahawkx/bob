@@ -1331,6 +1331,44 @@ async def builtin_match(
 
     return comp == come
 
+@_name("capturetext")
+async def builtin_capture_text_from_regex(
+    ctx: ParsingContext, conn: asyncpg.Connection, vbls: PARSE_VARS, stack: List[str], args: List[BaseAst]
+):
+    expr = await args[0].access(ctx, vbls, conn)
+    inpt = str(await args[1].access(ctx, vbls, conn))
+
+    if not isinstance(expr, safe_regex.Re):
+        raise ExecutionInterrupt(f"Argument 1: expected regex, not {expr.__class__.__name__}", stack)
+
+    if not isinstance(inpt, str):
+        raise ExecutionInterrupt(f"Argument 2: expected text, not {inpt.__class__.__name__}", stack)
+
+    finds = expr.groups(inpt)
+    if not finds:
+        return False
+
+    finds = finds[1:]
+
+    for n, group in enumerate(finds):
+        try:
+            name = await args[n+2].access(ctx, vbls, conn)
+            if not isinstance(name, str):
+                raise ExecutionInterrupt(f"Argument {n+1}: Expected text, not {name.__class__.__name__}", stack)
+
+            elif name in vbls:
+                raise ExecutionInterrupt(f"Argument {n+1}: Attempted to assign to variable that already exists", stack)
+
+        except IndexError:
+            raise ExecutionInterrupt(f"Argument {n+1}: Expected an argument, as your regex has a group to assign to it", stack)
+
+        if name == "_":
+            continue
+
+        vbls[name] = group
+
+    return True
+
 
 @_name("replace", 3)
 async def builtin_replace(

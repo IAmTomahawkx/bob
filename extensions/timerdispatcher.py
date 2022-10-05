@@ -8,8 +8,8 @@ from discord.ext import commands, tasks
 from core.bot import Bot
 
 
-def setup(bot):
-    bot.add_cog(Timers(bot))
+async def setup(bot):
+    await bot.add_cog(Timers(bot))
 
 
 class CurrentTask:

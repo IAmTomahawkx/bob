@@ -9,8 +9,8 @@ from core.models import *
 from core.views import Confirmation
 
 
-def setup(bot: Bot):
-    bot.add_cog(Config(bot))
+async def setup(bot: Bot):
+    await bot.add_cog(Config(bot))
 
 
 STEPS = [

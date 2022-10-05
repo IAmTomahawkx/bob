@@ -16,8 +16,8 @@ if TYPE_CHECKING:
     from .dispatch import Dispatch
 
 
-def setup(bot):
-    bot.add_cog(SelfRoles(bot))
+async def setup(bot):
+    await bot.add_cog(SelfRoles(bot))
 
 
 class SelfRoles(commands.Cog, name="Self Roles"):

@@ -141,7 +141,7 @@ class VariableAccess(BaseAst):
         from .parse import FROZEN_BUILTINS, BUILTINS
 
         if self.value in FROZEN_BUILTINS:  # fast lookup
-            if len(self.args) < BUILTINS[self.value][1]:
+            if BUILTINS[self.value][1] is not None and len(self.args) < BUILTINS[self.value][1]:
                 print(self.args)
                 raise ExecutionInterrupt(
                     f"| {{input}}\n| {' ' * self.token.start}{'^' * (self.token.end - self.token.start)}\n| "

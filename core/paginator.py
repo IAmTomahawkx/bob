@@ -2,6 +2,7 @@ import asyncio
 from typing import Dict, Any, Optional, List, Callable, Awaitable
 
 import discord
+from discord.utils import MISSING
 from discord import ui  # shortcut because I'm lazy
 from discord.ext.commands import Paginator as CommandPaginator, CommandError
 
@@ -369,7 +370,7 @@ class EmbeddedMultiPaginator(ui.View):
         sender: Callable[..., Awaitable[discord.Message]],
         pages: List[str],
         *,
-        title: str = discord.Embed.Empty,
+        title: str = MISSING,
         per_page=1500,
         show_page_count=False,
         delete_after=False,

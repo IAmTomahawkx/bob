@@ -6,8 +6,8 @@ from discord.ext import commands
 from core.context import Context
 
 
-def setup(bot):
-    bot.add_cog(Bull(bot))
+async def setup(bot):
+    await bot.add_cog(Bull(bot))
 
 
 class Bull(commands.Cog):

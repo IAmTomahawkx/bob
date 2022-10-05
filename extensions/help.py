@@ -14,7 +14,7 @@ if TYPE_CHECKING:
     from core.parse import ParsingContext
 
 
-def setup(bot: Bot):
+async def setup(bot: Bot):
     bot.help_command = HelpCommand()
 
 

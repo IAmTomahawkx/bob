@@ -10,8 +10,8 @@ if TYPE_CHECKING:
     from .dispatch import Dispatch
 
 
-def setup(bot: Bot):
-    bot.add_cog(Commands(bot))
+async def setup(bot: Bot):
+    await bot.add_cog(Commands(bot))
 
 
 class PartialCommand(TypedDict):

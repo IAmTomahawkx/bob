@@ -10,8 +10,8 @@ from core.bot import Bot
 from core import parse, utils
 
 
-def setup(bot: Bot):
-    bot.add_cog(Dispatch(bot))
+async def setup(bot: Bot):
+    await bot.add_cog(Dispatch(bot))
 
 
 class Dispatch(commands.Cog):
@@ -22,9 +22,14 @@ class Dispatch(commands.Cog):
         self.cached_triggers = {}
         self.ctx_cache = {}
         self.filled = asyncio.Event()
-        bot.loop.create_task(self.fill_triggers())
 
         self.recent_events = utils.ExpiringDict()
+
+    async def cog_load(self) -> None:
+        if not self.bot.is_ready():
+            self.bot.loop.create_task(self.fill_triggers())
+        else:
+            await self.fill_triggers()
 
     async def fill_triggers(self):
         await self.bot.wait_until_ready()

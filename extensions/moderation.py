@@ -73,8 +73,8 @@ class MassBanFlags(commands.FlagConverter, case_insensitive=True):
     mode: _MassBanModeConverter = _MassBanModeConverter.MODES["all"]
 
 
-def setup(bot: Bot):
-    bot.add_cog(Moderation(bot))
+async def setup(bot: Bot):
+    await bot.add_cog(Moderation(bot))
 
 
 class Moderation(commands.Cog):

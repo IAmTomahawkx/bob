@@ -110,6 +110,11 @@ async def parse_guild_config(cfg: str, ctx: Context) -> GuildConfig:
 
     return config
 
+async def find_recursion(cfg: GuildConfig) -> List[str]:
+    # to do this properly, we need to follow every branch. this could take a while
+    warnings = []
+
+
 
 async def parse_guild_selfroles(ctx: Context, cfg: Union[Dict[str, Any], List[Dict[str, Any]]]) -> List[SelfRole]:
     if isinstance(cfg, dict):

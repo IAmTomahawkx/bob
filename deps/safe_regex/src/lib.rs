@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use pyo3::{
     create_exception,
     exceptions::PyException,
@@ -56,6 +57,22 @@ impl Re {
     #[text_signature = "(input: str, replacer: str)"]
     fn replace(&self, input: &str, replacer: &str) -> String {
         self._re.replace(input, replacer).to_string()
+    }
+
+    #[text_signature = "(input: str)"]
+    fn groups<'a>(&self, input: &'a str) -> Option<Vec<&'a str>> {
+        let groups = self._re.captures(input)?;
+        Some(
+            groups.iter()
+                .map(|cap| cap.unwrap().as_str())
+                .collect::<Vec<&str>>()
+        )
+    }
+
+    #[text_signature = "(input: str)"]
+    fn match_position(&self, input: &str) -> Option<(usize, usize)> {
+        let finder = self._re.find(input)?;
+        Some((finder.start(), finder.end()))
     }
 }
 

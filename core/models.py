@@ -187,7 +187,7 @@ class GuildConfig:
         self.groups: Dict[str, Group] = {}
         self.selfroles: List[SelfRole] = []
         self.counters: Dict[str, ConfigCounter] = {}
-        self.events = []
+        self.events: List[ConfigEvent] = []
         self.automod_events: Dict[str, Automod] = {}
         self.loggers: Dict[str, Logger] = {}
         self.commands: Dict[str, Command] = {}

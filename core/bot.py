@@ -99,10 +99,7 @@ class Bot(commands.Bot):
         with open("config.json") as f:
             self.settings = json.load(f)
 
-    # async def setup(self):
-    #    await self.upload_guild_application_commands()
-
-    async def start(self) -> None:  # noqa
+    async def setup_hook(self) -> None:
         self.session = aiohttp.ClientSession()
         self.db: asyncpg.pool.Pool = await asyncpg.create_pool(self.settings["db_uri"], min_size=1)
         with open("schema.sql") as f:
@@ -110,16 +107,12 @@ class Bot(commands.Bot):
 
         await self.db.execute(schema)
 
-        self.load_extension("jishaku")
+        await self.load_extension("jishaku")
         for ext in os.listdir("extensions"):
             if not ext.endswith(".py") or ext.startswith("_"):
                 continue
 
-            self.load_extension(f"extensions.{ext[:-3]}")
-
-        await self.login(self._token)
-        await self.setup()
-        await self.connect(reconnect=True)
+            await self.load_extension(f"extensions.{ext[:-3]}")
 
     async def on_ready(self):
         print(self.user)

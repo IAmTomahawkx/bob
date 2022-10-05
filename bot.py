@@ -1,3 +1,5 @@
+import asyncio
+
 from core.bot import Bot
 
 try:
@@ -7,15 +9,20 @@ try:
 except:
     pass
 
+async def main():
+    bot = Bot()
+    async with bot:
+        try:
+            await bot.start()
+        finally:
+            import core.converters
+
+            if core.converters.config_session is not None:
+                await core.converters.config_session.close()
+
+            if not bot.is_closed():
+                await bot.close()
+
 if __name__ == "__main__":
     bot = Bot()
-    try:
-        bot.loop.run_until_complete(bot.start())
-    finally:
-        import core.converters
-
-        if core.converters.config_session is not None:
-            bot.loop.run_until_complete(core.converters.config_session.close())
-
-        bot.loop.run_until_complete(bot.close())
-        bot.loop.close()
+    bot.run(bot._token)

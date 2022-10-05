@@ -205,6 +205,31 @@ Returns
 ++++++++
 ``(text)`` The input text with the text replaced
 
+$capturetext
+-------------
+Stores the capture groups of a regex into variables that you can use later on.
+
+Due to the order of parsing in this bot, you may use this function in an ``if`` block, and the variables will be available to your action, ex:
+
+.. code-block:: toml
+
+    { reply = "$grammar there, $user", if = "$capturetext(/(hi|bye)/, $content, 'grammar') == true" }
+
+.. note::
+
+    | You cannot overwrite existing variables with this function. Attempting to do so will result in an error.
+    | To ignore a group, pass ``'_'`` as the variable name. You may do this as many times as you want.
+
+Arguments
+++++++++++
+| 1. ``(regex)`` The regex to match to. This should have at least one capture group. For more info on how to use regex, :ref:`Click Here<guide_regex>`
+| 2. ``(text)`` The text to be searched.
+| Additional arguments: Each group needs an additional argument (in order of the groups) specifying the name for the variable.
+
+Returns
+++++++++
+``(bool)`` Whether any text was found or not. If your regex did not match, this returns ``false``, otherwise it returns ``true``
+
 .. _builtin_caseactions:
 
 Built in moderation actions
