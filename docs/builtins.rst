@@ -228,7 +228,36 @@ Arguments
 
 Returns
 ++++++++
-``(bool)`` Whether any text was found or not. If your regex did not match, this returns ``false``, otherwise it returns ``true``
+``(true/false)`` Whether any text was found or not. If your regex did not match, this returns ``false``, otherwise it returns ``true``
+
+
+$addreaction
+-------------
+Adds a reaction to the invoking message. This only works if invoked from a message (eg. message automod or a custom command).
+You should check if you are in a message context using ``$ismessagecontext`` before using this function to avoid errors
+
+Arguments
+++++++++++
+| 1. ``(emoji)`` The emoji to add to the invoking message. This can be an emoji ID, an emoji name, or a full emoji object (type \\:emoji: to get this).
+    The emoji must be from your server
+
+Returns
+++++++++
+``(text)`` Empty text, so that this will dissapear from response text
+
+
+$ismessagecontext
+------------------
+This is a utility function to determine whether or not you are in a context invoked from a message.
+You can use this to pre-check whether or not you can use functions like ``$addreaction``.
+
+Arguments
+++++++++++
+This function takes no arguments
+
+Returns
+++++++++
+``(true/false)`` Whether or not your current context comes from a message event
 
 .. _builtin_caseactions:
 

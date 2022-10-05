@@ -1369,6 +1369,37 @@ async def builtin_capture_text_from_regex(
 
     return True
 
+EMOJI_RE = re.compile(r"<a?:([a-zA-Z0-9_]+):([0-9]+)>|([0-9]{18,23})")
+
+@_name("addreaction", 1)
+async def builtin_add_reaction(
+    ctx: ParsingContext, conn: asyncpg.Connection, vbls: PARSE_VARS, stack: List[str], args: List[BaseAst]
+):
+    emote = await args[0].access(ctx, vbls, conn)
+    if not isinstance(emote, str):
+        raise ExecutionInterrupt(f"Argument 1: expected text, not {emote.__class__.__name__}", stack)
+
+    reg = EMOJI_RE.match(emote)
+    resolved = None
+    if reg:
+        ids = reg.groups()[1:]
+        if any(ids):
+            ids = ids[0] or ids[1]
+            resolved = discord.utils.get(ctx.guild.emojis, id = ids)
+
+    if not resolved:
+        resolved = discord.utils.get(ctx.guild.emojis, name = emote)
+
+    if not resolved:
+        raise ExecutionInterrupt("Argument 1: No emoji found with that name/id in your server", stack)
+
+    msg: Optional[discord.Message] = ctx.message.get()
+    if not msg:
+        raise ExecutionInterrupt("This context was not invoked from a message event. Could not add a reaction to nothing!", stack)
+
+    await msg.add_reaction(resolved)
+    return ""
+
 
 @_name("replace", 3)
 async def builtin_replace(
@@ -1386,5 +1417,11 @@ async def builtin_replace(
 
     raise ExecutionInterrupt(f"Argument 1: expected a pattern or text, not {expr.__class__.__name__}", stack)
 
+
+@_name("ismessagecontext", 0)
+async def builtin_is_message_context(
+    ctx: ParsingContext, conn: asyncpg.Connection, vbls: PARSE_VARS, stack: List[str], args: List[BaseAst]
+):
+    return ctx.message.get() is not None
 
 FROZEN_BUILTINS = set(BUILTINS.keys())
