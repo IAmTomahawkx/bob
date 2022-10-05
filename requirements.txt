@@ -11,4 +11,4 @@ asyncpg
 lru_dict
 pytz
 ujson
-git+https://github.com/sethcall/toml.git@6e995bd0b18a1dcbb04fe72e9f43529fb6c87f22
+tomli

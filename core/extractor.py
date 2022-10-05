@@ -2,7 +2,7 @@ from __future__ import annotations
 from typing import Union, List, Dict, Any, Optional
 
 import re
-import toml
+import tomli
 import discord
 from discord.ext import commands
 
@@ -16,7 +16,7 @@ with open("assets/emoji.regex", encoding="utf8") as f:
 
 EMOJI_RE = re.compile(_emoji_re)
 FAST_EMOJI_RE = re.compile(r"<a?:([a-zA-Z0-9_]+):([0-9]+)>")
-EMOJI_FULL_RE = re.compile(r"<a?:[a-zA-Z0-9_]{2,32}:[0-9]{18,22}>|" + _emoji_re)
+EMOJI_FULL_RE = re.compile(r"<a?:[a-zA-Z0-9_]{2,32}:[0-9]{18,23}>|" + _emoji_re)
 
 del _emoji_re  # useless once it's compiled
 
@@ -55,9 +55,9 @@ async def parse_guild_config(cfg: str, ctx: Context) -> GuildConfig:
     config = GuildConfig(ctx.guild.id)
 
     try:
-        parsed = toml.loads(cfg)
-    except toml.TomlDecodeError as err:
-        raise ConfigLoadError(f"The structure of the file is invalid: {err.msg}")
+        parsed = tomli.loads(cfg)
+    except tomli.TOMLDecodeError as err:
+        raise ConfigLoadError(f"The structure of the file is invalid: {err.args[0]}")
 
     for x in parsed.keys():
         if x not in ALLOWED_KEYS:
