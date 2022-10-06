@@ -134,10 +134,10 @@ class Pages(ui.View):
             p.append("")
 
         if self.embed_author[0]:
-            self.embed.set_author(name=self.embed_author[0], icon_url=self.embed_author[1] or discord.Embed.Empty)
+            self.embed.set_author(name=self.embed_author[0], icon_url=self.embed_author[1] or MISSING)
 
         self.embed.description = "\n".join(p)
-        self.embed.title = self.title or discord.Embed.Empty
+        self.embed.title = self.title or MISSING
 
     async def show_page(self, page: int, *, first=False, msg_kwargs: Dict[str, Any] = None):
         self.current_page = page
@@ -275,8 +275,8 @@ class FieldPages(Pages):
 
     def prepare_embed(self, entries: List[Any], page: int, *, first=False):
         self.embed.clear_fields()
-        self.embed.description = self.description or discord.Embed.Empty
-        self.embed.title = self.title or discord.Embed.Empty
+        self.embed.description = self.description or MISSING
+        self.embed.title = self.title or MISSING
 
         for key, value in entries:
             self.embed.add_field(name=key, value=value, inline=False)

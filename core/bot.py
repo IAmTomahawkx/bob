@@ -132,6 +132,9 @@ class Bot(commands.Bot):
         ctx = await self.get_context(message, cls=Context)
         if not ctx.valid:
             customcmd = self.get_cog("Commands")
+            if not customcmd:
+                return
+
             await customcmd.dispatch_hook(ctx)  # noqa
         else:
             await self.invoke(ctx)
