@@ -108,7 +108,8 @@ class Dispatch(commands.Cog):
                 del self.cached_triggers["groups"][guild_id]
 
         if guild_id in self.ctx_cache:
-            del self.ctx_cache[guild_id]
+            ctx = self.ctx_cache.pop(guild_id)
+            self.bot.loop.create_task(ctx.dispose())
 
     async def invalidate_cache_for(self, guild_id: int, conn: asyncpg.Connection):
         await self.filled.wait()
@@ -119,7 +120,8 @@ class Dispatch(commands.Cog):
             del self.cached_triggers["automod"][guild_id]
 
         if guild_id in self.ctx_cache:
-            del self.ctx_cache[guild_id]
+            ctx = self.ctx_cache.pop(guild_id)
+            await ctx.dispose()
 
         data = await conn.fetch(
             """

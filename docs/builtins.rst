@@ -259,6 +259,21 @@ Returns
 ++++++++
 ``(true/false)`` Whether or not your current context comes from a message event
 
+
+$fetch
+-------
+Fetches the given URL.
+This makes a GET request to the given URL, and only accepts a ``text/plain`` content type in return.
+
+Arguments
+++++++++++
+| 1. ``(text)`` The URL to fetch, ex ``'https://icanhazdadjoke.com'``
+
+Returns
+++++++++
+``(text)`` The response body from the request.
+
+
 .. _builtin_caseactions:
 
 Built in moderation actions

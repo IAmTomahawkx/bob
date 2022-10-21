@@ -6,6 +6,8 @@ from typing import Optional, List, Union, TYPE_CHECKING, Dict, Any
 import datetime
 import re
 import random
+
+import aiohttp
 import asyncpg
 import discord
 import ujson
@@ -39,8 +41,21 @@ class ParsingContext:
         self.actions = {}
         self._fetched = False
 
+        self.session: aiohttp.ClientSession | None = None
+
         self.message = contextvars.ContextVar("message", default=None)
         self.callerid = contextvars.ContextVar("callerid", default=None)
+
+    async def ensure_session(self):
+        if not self.session:
+            self.session = aiohttp.ClientSession(headers={
+                "User-Agent": f"Bot (BOB @ github.com/IAmTomahawkx/BOB) VIA request by {self.guild.id}",
+                "Accept": "text/plain"
+            })
+
+    async def dispose(self):
+        if self.session:
+            await self.session.close()
 
     async def fetch_required_data(self):
         if self._fetched:
@@ -1430,6 +1445,30 @@ async def builtin_is_message_context(
     ctx: ParsingContext, conn: asyncpg.Connection, vbls: PARSE_VARS, stack: List[str], args: List[BaseAst]
 ):
     return ctx.message.get() is not None
+
+@_name("fetch", 1)
+async def builtin_fetch_url(
+    ctx: ParsingContext, conn: asyncpg.Connection, vbls: PARSE_VARS, stack: List[str], args: List[BaseAst]
+):
+    url = await args[0].access(ctx, vbls, conn)
+    await ctx.ensure_session()
+    try:
+        async with ctx.session.get(url, allow_redirects=False) as resp:
+            if 300 > resp.status > 399:
+                return "<API returned a redirect>"
+
+            try:
+                data = await resp.text()
+            except:
+                return "<API returned non-text body>"
+
+            if 200 > resp.status > 299:
+                return f"<API returned non-ok response: {data}>"
+
+            return data
+
+    except Exception as e:
+        return f"<Failed API request: {e.args[0]}>"
 
 
 FROZEN_BUILTINS = set(BUILTINS.keys())
