@@ -387,10 +387,7 @@ class ParsingContext:
         if action["args"]:
             stack.append(f"'args' values parsing")
             args.update(
-                {
-                    k.strip("$"): await self.format_fmt(v, conn, stack, args, True)
-                    for k, v in action["args"].items()
-                }
+                {k.strip("$"): await self.format_fmt(v, conn, stack, args, True) for k, v in action["args"].items()}
             )
             stack.pop()
 
@@ -1055,8 +1052,7 @@ async def builtin_kick(
         else:
             return f"Cannot kick user with id {user}:\n{e.args[0]}"
 
-
-    caller: int = ctx.callerid.get() # noqa
+    caller: int = ctx.callerid.get()  # noqa
     caseid = await make_case(ctx, conn, user, "kick", reason or "No reason given", modid=caller)
 
     if "case" in ctx.events:
@@ -1119,7 +1115,7 @@ async def builtin_ban(
         else:
             return f"cannot ban user with id {user}:\n{e.args[0]}"
 
-    caller: int = ctx.callerid.get() # noqa
+    caller: int = ctx.callerid.get()  # noqa
 
     if duration:
         caseid = await make_case(ctx, conn, user, "tempban", reason or "No reason given", modid=caller)
@@ -1202,7 +1198,7 @@ async def builtin_mute(
         tid,
     )
 
-    caller: int = ctx.callerid.get() # noqa
+    caller: int = ctx.callerid.get()  # noqa
 
     if duration:
         caseid = await make_case(ctx, conn, user, "tempmute", reason or "No reason given", modid=caller)
@@ -1264,7 +1260,7 @@ async def builtin_timeout(
     if member.top_role.position >= ctx.guild.me.top_role.position:
         raise ExecutionInterrupt("The target user is above me and I cannot time them out", stack)
 
-    caller: int = ctx.callerid.get() # noqa
+    caller: int = ctx.callerid.get()  # noqa
 
     try:
         await member.timeout(duration)
