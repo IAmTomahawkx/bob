@@ -18,7 +18,7 @@ from deps import arg_lex, safe_regex
 from .models import *
 from .bot import Bot
 from .context import Context
-from .time import ShortTime, human_timedelta
+from .time import ShortTime, human_timedelta, UserFriendlyTime
 from .ast import *
 
 if TYPE_CHECKING:
@@ -190,22 +190,7 @@ class ParsingContext:
                 if not messageable and runner["type"] == ActionTypes.reply:
                     continue
 
-                stack.append(f"parse action #{i}")
-                args = (vbls and vbls.copy()) or {}
-
-                if runner["args"]:
-                    stack.append(f"'args' values parsing")
-                    args.update(
-                        {
-                            k.strip("$"): await self.format_fmt(v, conn, stack, args, True)
-                            for k, v in runner["args"].items()
-                        }
-                    )
-                    stack.pop()
-
-                stack.pop()
-
-                r = await self.run_action(runner, conn, args, stack, i)
+                r = await self.run_action(runner, conn, vbls, stack, i)
                 if r and messageable:
                     await messageable.send(r)
 
@@ -231,18 +216,8 @@ class ParsingContext:
 
         for i, runner in enumerate(automod["actions"]):
             act = self.actions[runner]
-            stack.append(f"parse action #{i}")
-            args = (vbls and vbls.copy()) or {}
-            if act["args"]:
-                stack.append(f"'args' values parsing")
-                args.update(
-                    {k.strip("$"): await self.format_fmt(v, conn, stack, args, True) for k, v in act["args"].items()}
-                )
-                stack.pop()
 
-            stack.pop()
-
-            r = await self.run_action(act, conn, args, stack, i, messageable)
+            r = await self.run_action(act, conn, vbls, stack, i, messageable)
             # stack.pop()
             if r and messageable:
                 try:
@@ -404,18 +379,33 @@ class ParsingContext:
         if not await self.calculate_conditional(action["condition"], stack, vbls, conn):
             return
 
+        stack.append(f"parse action #{n}")
+        args = (vbls and vbls.copy()) or {}
+
+        if action["args"]:
+            stack.append(f"'args' values parsing")
+            args.update(
+                {
+                    k.strip("$"): await self.format_fmt(v, conn, stack, args, True)
+                    for k, v in action["args"].items()
+                }
+            )
+            stack.pop()
+
+        stack.pop()
+
         acts = {
-            ActionTypes.dispatch: (False, lambda: self.run_event(action["main_text"], conn, stack, vbls, messageable)),
+            ActionTypes.dispatch: (False, lambda: self.run_event(action["main_text"], conn, stack, args, messageable)),
             ActionTypes.log: (
                 False,
-                lambda: self.run_logger(action["main_text"], action["event"], conn, stack, vbls),
+                lambda: self.run_logger(action["main_text"], action["event"], conn, stack, args),
             ),
             ActionTypes.counter: (
                 False,
-                lambda: self.alter_counter(action["main_text"], conn, stack, action["modify"], action["target"], vbls),
+                lambda: self.alter_counter(action["main_text"], conn, stack, action["modify"], action["target"], args),
             ),
-            ActionTypes.reply: (True, lambda: self.format_fmt(action["main_text"], conn, stack, vbls)),
-            ActionTypes.do: (False, lambda: self.format_fmt(action["main_text"], conn, stack, vbls)),
+            ActionTypes.reply: (True, lambda: self.format_fmt(action["main_text"], conn, stack, args)),
+            ActionTypes.do: (False, lambda: self.format_fmt(action["main_text"], conn, stack, args)),
         }
 
         respond, fn = acts[action["type"]]
@@ -672,7 +662,7 @@ class ParsingContext:
                     out.append(x)
                     continue
 
-                elif isinstance(x, (CounterAccess, VariableAccess, ChainedBiOpExpr)):
+                elif isinstance(x, (CounterAccess, VariableAccess)):
                     out.append(x)
                     if x.args:
                         x.args = recurse_biops(x.args)
@@ -692,7 +682,7 @@ class ParsingContext:
                             stack,
                         )
 
-                    x.left = out.pop()
+                    x.left = outp.pop()
                     try:
                         x.right = next(_it)
                     except StopIteration:
@@ -746,19 +736,7 @@ class ParsingContext:
         for i, runner in enumerate(cmd["actions"]):
             runner = self.actions[runner]
 
-            stack.append(f"parse action #{i}")
-            args = (vbls and vbls.copy()) or {}
-
-            if runner["args"]:
-                stack.append(f"'args' values parsing")
-                args.update(
-                    {k.strip("$"): await self.format_fmt(v, conn, stack, args, True) for k, v in runner["args"].items()}
-                )
-                stack.pop()
-
-            stack.pop()
-
-            r = await self.run_action(runner, conn, args, stack, i)
+            r = await self.run_action(runner, conn, vbls, stack, i)
             if r:
                 await message.reply(r)
 
@@ -1075,15 +1053,17 @@ async def builtin_kick(
         else:
             return f"Cannot kick user with id {user}:\n{e.args[0]}"
 
-    caseid = await make_case(ctx, conn, user, "kick", reason or "No reason given", modid=vbls["__callerid__"])
+
+    caller: int = ctx.callerid.get() # noqa
+    caseid = await make_case(ctx, conn, user, "kick", reason or "No reason given", modid=caller)
 
     if "case" in ctx.events:
         mutated = vbls.copy()
         mutated["caseid"] = caseid
         mutated["casereason"] = reason or "No reason given"
         mutated["caseaction"] = "kick"
-        mutated["casemodid"] = vbls["__callerid__"]
-        mutated["casemodname"] = str(ctx.guild.get_member(vbls["__callerid__"]))
+        mutated["casemodid"] = caller
+        mutated["casemodname"] = str(ctx.guild.get_member(caller))
         mutated["caseuserid"] = user
         mutated["caseusername"] = name
 
@@ -1137,18 +1117,20 @@ async def builtin_ban(
         else:
             return f"cannot ban user with id {user}:\n{e.args[0]}"
 
+    caller: int = ctx.callerid.get() # noqa
+
     if duration:
-        caseid = await make_case(ctx, conn, user, "tempban", reason or "No reason given", modid=vbls["__callerid__"])
+        caseid = await make_case(ctx, conn, user, "tempban", reason or "No reason given", modid=caller)
     else:
-        caseid = await make_case(ctx, conn, user, "ban", reason or "No reason given", modid=vbls["__callerid__"])
+        caseid = await make_case(ctx, conn, user, "ban", reason or "No reason given", modid=caller)
 
     if "case" in ctx.events:
         mutated = vbls.copy()
         mutated["caseid"] = caseid
         mutated["casereason"] = reason or "No reason given"
         mutated["caseaction"] = "ban"
-        mutated["casemodid"] = vbls["__callerid__"]
-        mutated["casemodname"] = str(ctx.guild.get_member(vbls["__callerid__"]))
+        mutated["casemodid"] = caller
+        mutated["casemodname"] = str(ctx.guild.get_member(caller))
         mutated["caseuserid"] = user
         mutated["caseusername"] = name
 
@@ -1218,18 +1200,20 @@ async def builtin_mute(
         tid,
     )
 
+    caller: int = ctx.callerid.get() # noqa
+
     if duration:
-        caseid = await make_case(ctx, conn, user, "tempmute", reason or "No reason given", modid=vbls["__callerid__"])
+        caseid = await make_case(ctx, conn, user, "tempmute", reason or "No reason given", modid=caller)
     else:
-        caseid = await make_case(ctx, conn, user, "mute", reason or "No reason given", modid=vbls["__callerid__"])
+        caseid = await make_case(ctx, conn, user, "mute", reason or "No reason given", modid=caller)
 
     if "case" in ctx.events:
         mutated = vbls.copy()
         mutated["caseid"] = caseid
         mutated["casereason"] = reason or "No reason given"
-        mutated["caseaction"] = "mute" if member else "forcemute"
-        mutated["casemodid"] = vbls["__callerid__"]
-        mutated["casemodname"] = str(ctx.guild.get_member(vbls["__callerid__"]))
+        mutated["caseaction"] = "tempmute" if duration else "mute"
+        mutated["casemodid"] = caller
+        mutated["casemodname"] = str(ctx.guild.get_member(caller))
         mutated["caseuserid"] = user
         mutated["caseusername"] = member and str(member)
         mutated["muteexpires"] = "indefinitely" if not duration else f"until {duration.isoformat()}"
@@ -1244,6 +1228,64 @@ async def builtin_mute(
             return f"cannot mute <@!{user}>:\n{e.args[0]}"
 
     return f"muted {member}{f' until {human_timedelta(duration)}' if duration else ''}"
+
+
+@_name("timeout")
+async def builtin_timeout(
+    ctx: ParsingContext, conn: asyncpg.Connection, vbls: PARSE_VARS, stack: List[str], args: List[BaseAst]
+):
+    user = await args[0].access(ctx, vbls, conn)
+    if not isinstance(user, int):
+        raise ExecutionInterrupt(f"Expected a user id, got {user.__class__.__name__}", stack)
+
+    _arglen = len(args)
+    reason = None
+
+    duration = str(await args[1].access(ctx, vbls, conn))
+    try:
+        duration = (await UserFriendlyTime().convert(None, duration)).dt
+    except commands.BadArgument as e:
+        return f"The duration ('{duration}') is invalid: {e.args[0]}"
+
+    if _arglen > 2:
+        reason = str(await args[2].access(ctx, vbls, conn))
+
+    me = ctx.guild.me
+    member: discord.Member = ctx.guild.get_member(user)  # noqa
+
+    if not member:
+        return f"The target user is not in your server"
+
+    if not me.guild_permissions.moderate_members:
+        raise ExecutionInterrupt("I do not have the Moderate Members permission, and cannot timeout members", stack)
+
+    if member.top_role.position >= ctx.guild.me.top_role.position:
+        raise ExecutionInterrupt("The target user is above me and I cannot time them out", stack)
+
+    caller: int = ctx.callerid.get() # noqa
+
+    try:
+        await member.timeout(duration)
+    except discord.HTTPException as e:
+        return f"cannot time out <@!{user}>:\n{e.args[0]}"
+
+    caseid = await make_case(ctx, conn, user, "tempmute", reason or "No reason given", modid=caller)
+
+    if "case" in ctx.events:
+        mutated = vbls.copy()
+        mutated["caseid"] = caseid
+        mutated["casereason"] = reason or "No reason given"
+        mutated["caseaction"] = "tempmute" if duration else "mute"
+        mutated["casemodid"] = caller
+        mutated["casemodname"] = str(ctx.guild.get_member(caller))
+        mutated["caseuserid"] = user
+        mutated["caseusername"] = member and str(member)
+        mutated["muteexpires"] = "indefinitely" if not duration else f"until {duration.isoformat()}"
+        mutated["muteduration"] = human_timedelta(duration)
+
+        await ctx.run_event("case", conn, stack, mutated)
+
+    return f"Timed out {member} for {human_timedelta(duration)}"
 
 
 @_name("addrole", 2)

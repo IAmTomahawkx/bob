@@ -847,7 +847,7 @@ async def static_parse(parsable: str, context: str, strict_errors=False) -> List
                 out.append(x)
                 continue
 
-            elif isinstance(x, (CounterAccess, VariableAccess, ChainedBiOpExpr)):
+            elif isinstance(x, (CounterAccess, VariableAccess)):
                 out.append(x)
                 if x.args:
                     x.args = recurse_biops(x.args)
@@ -866,7 +866,7 @@ async def static_parse(parsable: str, context: str, strict_errors=False) -> List
                         f"{context}\n| {parsable}\n| {' '*x.token.start}{'^'*(x.token.end-x.token.start)}\n| Unexpected '{x.value}' here"
                     )
 
-                x.left = out.pop()
+                x.left = outp.pop()
                 try:
                     x.right = next(_it)
                 except StopIteration:

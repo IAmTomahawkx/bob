@@ -28,6 +28,7 @@ import datetime
 import re
 from typing import Any, TYPE_CHECKING, Optional, TypeVar
 
+import discord.utils
 import parsedatetime as pdt
 from dateutil.relativedelta import relativedelta
 from discord.ext import commands
@@ -103,7 +104,7 @@ class ShortTime:
             raise commands.BadArgument("invalid time provided")
 
         data = {k: int(v) for k, v in match.groupdict(default=0).items()}  # noqa
-        now = now or datetime.datetime.utcnow()
+        now = now or discord.utils.utcnow()
         self.dt = now + relativedelta(**data)
 
     @classmethod
@@ -184,7 +185,7 @@ class UserFriendlyTime(commands.Converter):
         self = UserFriendlyTime(self.converter, default=self.default)  # noqa
 
         calendar = HumanTime.calendar
-        now = datetime.datetime.utcnow()
+        now = discord.utils.utcnow()
 
         # apparently nlp does not like "from now"
         # it likes "from x" in other cases though so let me handle the 'now' case
@@ -215,7 +216,7 @@ class UserFriendlyTime(commands.Converter):
         # first the first two cases:
         dt, status, begin, end, dt_string = elements[0]
 
-        self.dt = dt
+        self.dt = dt.replace(tzinfo=datetime.timezone.utc)
 
         if begin in (0, 1):
             if begin == 1:
@@ -261,7 +262,7 @@ class PastUserFriendlyTime(UserFriendlyTime):
 
 
 def human_timedelta(dt, *, source=None, accuracy=3, brief=False, suffix=True):
-    now = source or datetime.datetime.utcnow()
+    now = source or discord.utils.utcnow()
     # Microsecond free zone
     now = now.replace(microsecond=0)
     dt = dt.replace(microsecond=0)

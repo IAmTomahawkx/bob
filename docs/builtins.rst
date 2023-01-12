@@ -94,7 +94,8 @@ Nothing
 
 $mute
 ------
-Applies the configured mute role to the target, creates a case, and dispatches the appropriate events and automod actions
+Applies the configured mute role to the target, creates a case, and dispatches the appropriate events and automod actions.
+If you are looking to take advantage of discord's built-in timeout system, see ``$timeout``.
 
 Arguments
 ++++++++++
@@ -105,6 +106,23 @@ Arguments
 Returns
 ++++++++
 ``(text)`` A nicely formatted string: ``Muted User#0000``, or ``Muted User#0000 for 2 hours`` if a duration is provided
+
+
+$timeout
+---------
+Leverages discord's built-in timeout system to apply a server-wide mute to the user.
+They will not be able to send messages, add reactions, or join voice channels (or speak if already in one).
+This function will create a case, dispatch the appropriate events and automod triggers.
+
+Arguments
+++++++++++
+| 1: ``(number)`` The :ref:`ID<faq_userid>` of the user to timeout
+| 2: ``(text)`` The duration to timeout for. This can be in a time form ("for two days"), or a more concrete form ("saturday at 11 pm"). Times are in UTC
+| 3: ``(text)`` [OPTIONAL] The reason for the timeout
+
+Returns
+++++++++
+``(text)`` A nicely formatted string: ``Timed out User#0000 for 2 hours``
 
 
 $kick
