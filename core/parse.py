@@ -48,10 +48,12 @@ class ParsingContext:
 
     async def ensure_session(self):
         if not self.session:
-            self.session = aiohttp.ClientSession(headers={
-                "User-Agent": f"Bot (BOB @ github.com/IAmTomahawkx/BOB) VIA request by {self.guild.id}",
-                "Accept": "text/plain"
-            })
+            self.session = aiohttp.ClientSession(
+                headers={
+                    "User-Agent": f"Bot (BOB @ github.com/IAmTomahawkx/BOB) VIA request by {self.guild.id}",
+                    "Accept": "text/plain",
+                }
+            )
 
     async def dispose(self):
         if self.session:
@@ -1487,6 +1489,7 @@ async def builtin_is_message_context(
     ctx: ParsingContext, conn: asyncpg.Connection, vbls: PARSE_VARS, stack: List[str], args: List[BaseAst]
 ):
     return ctx.message.get() is not None
+
 
 @_name("fetch", 1)
 async def builtin_fetch_url(
